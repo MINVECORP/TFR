@@ -1,0 +1,7 @@
+{
+  "name": "FittingRoom Pro - Smart Retail Inventory",
+  "description": "A specialized tool for retail staff to track fitting room inventory, manage customer sessions, and analyze product rotation and conversion rates.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
