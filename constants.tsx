@@ -1,5 +1,18 @@
 
-import { Product, User, Role } from './types';
+import { Product, User, Role, Store, BillingStatus, Brand, AdRequest } from './types';
+
+export const initialBrands: Brand[] = [
+  {
+    id: 'brand-1',
+    name: 'Santiago Retail Group',
+    ownerId: 'santi-maestro',
+    billingConfig: {
+      type: 'per_store',
+      price: 150,
+      status: BillingStatus.PAID
+    }
+  }
+];
 
 export const initialUsers: User[] = [
   // Usuario Santiago - Acceso Multi-Portal
@@ -45,6 +58,36 @@ export const initialUsers: User[] = [
     email: 'staff1@fittingpro.com', 
     password: 'staff123', 
     role: Role.STAFF 
+  }
+];
+
+export const initialStores: Store[] = [
+  {
+    id: 'store-1',
+    brandId: 'brand-1',
+    name: 'Sede Central Santiago',
+    location: 'Calle Principal 123, Bogotá',
+    adminId: 'santi-gerente',
+    config: { fittingRoomsCount: 10 },
+    billing: {
+      plan: 'enterprise',
+      status: BillingStatus.PAID,
+      nextBillingDate: Date.now() + 30 * 24 * 60 * 60 * 1000,
+      history: [],
+      price: 150
+    }
+  }
+];
+
+export const initialAdRequests: AdRequest[] = [
+  {
+    id: 'ad-1',
+    brandId: 'brand-1',
+    storeId: 'store-1',
+    title: 'Campaña Verano 2026',
+    description: 'Promoción de vestidos de baño y ropa ligera.',
+    status: 'pending',
+    requestedAt: Date.now()
   }
 ];
 

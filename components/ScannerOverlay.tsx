@@ -90,7 +90,7 @@ const ScannerOverlay: React.FC<ScannerOverlayProps> = ({ onClose, onScan, custom
 
       // Verificar si el hardware soporta linterna (flash)
       try {
-        const track = html5QrCode.getRunningTrack();
+        const track = (html5QrCode as any).getRunningTrack();
         if (track && (track.getCapabilities() as any).torch) {
           setHasFlash(true);
         }

@@ -1,21 +1,30 @@
 
 import React, { useState, useEffect } from 'react';
-import { FittingSession, Product, ItemStatus } from '../types';
+import { FittingSession, Product, ItemStatus, ItemExitDestination } from '../types';
 // Fixed: Added missing Package and X icons to the lucide-react import
-import { Clock, Plus, LogOut, CheckCircle2, ChevronRight, ShoppingBag, Trash2, Package, X } from 'lucide-react';
+import { Clock, Plus, LogOut, CheckCircle2, ChevronRight, ShoppingBag, Trash2, Package, X, RefreshCcw, AlertTriangle } from 'lucide-react';
 
 interface SessionCardProps {
   session: FittingSession;
   products: Product[];
   onAddItems: () => void;
-  onClose: (soldItems: string[]) => void;
+  onClose: (auditData: Record<string, ItemExitDestination>) => void;
 }
 
 const SessionCard: React.FC<SessionCardProps> = ({ session, products, onAddItems, onClose }) => {
   const [elapsedMins, setElapsedMins] = useState(0);
   const [elapsedStr, setElapsedStr] = useState('00:00');
   const [isClosingModal, setIsClosingModal] = useState(false);
-  const [selectedForSale, setSelectedForSale] = useState<Record<string, boolean>>({});
+  const [auditData, setAuditData] = useState<Record<string, ItemExitDestination>>({});
+
+  useEffect(() => {
+    // Initialize audit data with RELOCATION by default
+    const initialAudit: Record<string, ItemExitDestination> = {};
+    session.items.forEach(item => {
+      initialAudit[item.sku] = ItemExitDestination.RELOCATION;
+    });
+    setAuditData(initialAudit);
+  }, [session.items]);
 
   useEffect(() => {
     const updateTimer = () => {
@@ -45,8 +54,8 @@ const SessionCard: React.FC<SessionCardProps> = ({ session, products, onAddItems
     data: products.find(p => p.sku === item.sku)
   }));
 
-  const toggleSale = (sku: string) => {
-    setSelectedForSale(prev => ({ ...prev, [sku]: !prev[sku] }));
+  const setDestination = (sku: string, dest: ItemExitDestination) => {
+    setAuditData(prev => ({ ...prev, [sku]: dest }));
   };
 
   return (
@@ -55,7 +64,14 @@ const SessionCard: React.FC<SessionCardProps> = ({ session, products, onAddItems
       
       <div className="flex justify-between items-start mb-6">
         <div>
-          <h3 className="text-xl font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{session.customerName}</h3>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="bg-indigo-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">
+              Probador {session.fittingRoomId}
+            </span>
+          </div>
+          <h3 className="text-xl font-black text-slate-900 group-hover:text-indigo-600 transition-colors">
+            {session.customerPhone}
+          </h3>
           <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider mt-2 ${style.light} ${style.text}`}>
             <Clock className="w-3 h-3" />
             {elapsedStr}
@@ -119,48 +135,72 @@ const SessionCard: React.FC<SessionCardProps> = ({ session, products, onAddItems
               </button>
             </div>
 
-            <div className="space-y-3 mb-10 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
+            <div className="space-y-6 mb-10 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
               {sessionItemsWithData.map((item, idx) => (
-                <button 
+                <div 
                   key={idx}
-                  onClick={() => toggleSale(item.sku)}
-                  className={`w-full flex items-center justify-between p-6 rounded-3xl transition-all border-2 text-left ${
-                    selectedForSale[item.sku] 
-                      ? 'border-indigo-600 bg-indigo-50 shadow-indigo-100' 
-                      : 'border-slate-100 bg-slate-50 hover:border-slate-300'
-                  }`}
+                  className="p-6 rounded-3xl bg-slate-50 border border-slate-100 space-y-4"
                 >
                   <div className="flex items-center gap-4">
-                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${
-                      selectedForSale[item.sku] ? 'bg-indigo-600 text-white' : 'bg-white text-slate-300'
-                    }`}>
-                      <ShoppingBag className="w-7 h-7" />
+                    <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center text-slate-400 shadow-sm">
+                      <Package className="w-6 h-6" />
                     </div>
                     <div>
-                      <h4 className={`font-black ${selectedForSale[item.sku] ? 'text-indigo-900' : 'text-slate-700'}`}>
-                        {item.data?.name}
+                      <h4 className="font-black text-slate-800 leading-tight">
+                        {item.data?.name || 'Item Desconocido'}
                       </h4>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{item.sku}</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.sku}</p>
                     </div>
                   </div>
-                  {selectedForSale[item.sku] ? (
-                    <div className="bg-indigo-600 p-1 rounded-full">
-                       <CheckCircle2 className="w-8 h-8 text-white" />
-                    </div>
-                  ) : (
-                    <div className="w-8 h-8 rounded-full border-2 border-slate-200"></div>
-                  )}
-                </button>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <button 
+                      onClick={() => setDestination(item.sku, ItemExitDestination.RELOCATION)}
+                      className={`flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border-2 transition-all ${
+                        auditData[item.sku] === ItemExitDestination.RELOCATION 
+                          ? 'border-indigo-600 bg-indigo-50 text-indigo-600' 
+                          : 'border-transparent bg-white text-slate-400'
+                      }`}
+                    >
+                      <RefreshCcw className="w-5 h-5" />
+                      <span className="text-[8px] font-black uppercase tracking-tighter">Reubicar</span>
+                    </button>
+                    
+                    <button 
+                      onClick={() => setDestination(item.sku, ItemExitDestination.PURCHASE)}
+                      className={`flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border-2 transition-all ${
+                        auditData[item.sku] === ItemExitDestination.PURCHASE 
+                          ? 'border-emerald-600 bg-emerald-50 text-emerald-600' 
+                          : 'border-transparent bg-white text-slate-400'
+                      }`}
+                    >
+                      <ShoppingBag className="w-5 h-5" />
+                      <span className="text-[8px] font-black uppercase tracking-tighter">Compra</span>
+                    </button>
+
+                    <button 
+                      onClick={() => setDestination(item.sku, ItemExitDestination.MISSING)}
+                      className={`flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border-2 transition-all ${
+                        auditData[item.sku] === ItemExitDestination.MISSING 
+                          ? 'border-rose-600 bg-rose-50 text-rose-600' 
+                          : 'border-transparent bg-white text-slate-400'
+                      }`}
+                    >
+                      <AlertTriangle className="w-5 h-5" />
+                      <span className="text-[8px] font-black uppercase tracking-tighter">Faltante</span>
+                    </button>
+                  </div>
+                </div>
               ))}
             </div>
 
             <div className="flex flex-col gap-4">
               <button 
-                onClick={() => onClose(Object.keys(selectedForSale).filter(k => selectedForSale[k]))}
+                onClick={() => onClose(auditData)}
                 className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-6 rounded-[2rem] flex items-center justify-center gap-3 shadow-2xl shadow-indigo-900/40 text-lg transition-all active:scale-95"
               >
                 <CheckCircle2 className="w-6 h-6" />
-                CONFIRMAR ARQUEO
+                FINALIZAR ARQUEO
               </button>
               <p className="text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                 Esta acción liberará el probador y actualizará el inventario

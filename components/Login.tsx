@@ -34,8 +34,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
     setTimeout(() => {
       const user = users.find(
         (u) => 
-          u.email.toLowerCase() === email.toLowerCase() && 
-          u.password === password &&
+          u.email.toLowerCase().trim() === email.toLowerCase().trim() && 
+          u.password.trim() === password.trim() &&
           u.role === selectedRole // Validación estricta de rol según portal
       );
 
