@@ -35,7 +35,8 @@ export const initialUsers: User[] = [
     name: 'Santiago (Staff)', 
     email: 'santiago@minve.co', 
     password: '123456', 
-    role: Role.STAFF 
+    role: Role.STAFF,
+    storeId: 'store-1'
   },
   // Usuarios Base
   { 
@@ -57,7 +58,8 @@ export const initialUsers: User[] = [
     name: 'Staff Piso 1', 
     email: 'staff1@fittingpro.com', 
     password: 'staff123', 
-    role: Role.STAFF 
+    role: Role.STAFF,
+    storeId: 'store-1'
   }
 ];
 
@@ -69,6 +71,7 @@ export const initialStores: Store[] = [
     location: 'Calle Principal 123, Bogotá',
     adminId: 'santi-gerente',
     config: { fittingRoomsCount: 10 },
+    code: 'SANTI123',
     billing: {
       plan: 'enterprise',
       status: BillingStatus.PAID,

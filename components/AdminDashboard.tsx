@@ -1,11 +1,12 @@
 
 import React, { useState, useMemo } from 'react';
-import { User, Product, InventoryLog, FittingSession, TimeRange, Role, Customer, StoreConfig, Store, BillingStatus, Invoice, Brand, AdRequest } from '../types';
+import { User, Product, InventoryLog, FittingSession, TimeRange, Role, Customer, StoreConfig, Store, BillingStatus, Invoice, Brand, AdRequest, InventoryAlert, SessionStatus, ItemExitDestination, SMSCampaign, ItemStatus } from '../types';
 import { 
   BarChart3, 
   TrendingUp, 
   Package, 
   Users, 
+  User as UserIcon,
   Upload, 
   Search,
   ArrowUpRight,
@@ -23,6 +24,7 @@ import {
   Layers,
   History,
   ShieldCheck,
+  Sparkles,
   Plus,
   Home,
   Smartphone,
@@ -33,7 +35,14 @@ import {
   X,
   Megaphone,
   Download,
-  PieChart as PieChartIcon
+  PieChart as PieChartIcon,
+  Menu,
+  Bell,
+  Check,
+  AlertTriangle,
+  ArrowRightLeft,
+  ArrowLeft,
+  MessageSquare
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, LineChart, Line } from 'recharts';
 
@@ -59,15 +68,20 @@ interface AdminDashboardProps {
   setBrands: React.Dispatch<React.SetStateAction<Brand[]>>;
   adRequests: AdRequest[];
   setAdRequests: React.Dispatch<React.SetStateAction<AdRequest[]>>;
+  inventoryAlerts: InventoryAlert[];
+  setInventoryAlerts: React.Dispatch<React.SetStateAction<InventoryAlert[]>>;
+  smsCampaigns: SMSCampaign[];
+  setSmsCampaigns: React.Dispatch<React.SetStateAction<SMSCampaign[]>>;
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
-  user, onLogout, products, setProducts, logs, sessions, storeConfig, setStoreConfig, customers, users, setUsers, stores, setStores, brands, setBrands, adRequests, setAdRequests 
+  user, onLogout, products, setProducts, logs, sessions, storeConfig, setStoreConfig, customers, users, setUsers, stores, setStores, brands, setBrands, adRequests, setAdRequests, inventoryAlerts, setInventoryAlerts, smsCampaigns, setSmsCampaigns
 }) => {
   const isSuperAdmin = user.role === Role.SUPER_ADMIN;
   
   // Tabs diferenciadas por rol
   const [activeTab, setActiveTab] = useState<string>(isSuperAdmin ? 'global' : 'overview');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [timeRange, setTimeRange] = useState<TimeRange>('day');
   const [showCreateStore, setShowCreateStore] = useState(false);
   const [showCreateBrand, setShowCreateBrand] = useState(false);
@@ -75,11 +89,41 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [editingStoreBilling, setEditingStoreBilling] = useState<Store | null>(null);
   const [newStore, setNewStore] = useState({ name: '', location: '', adminEmail: '', plan: 'pro' as const, brandId: '' });
   const [newBrand, setNewBrand] = useState({ name: '', billingType: 'per_store' as const, price: 150 });
-  const [newAdRequest, setNewAdRequest] = useState({ title: '', description: '', storeId: '' });
+  const [newAdRequest, setNewAdRequest] = useState({ title: '', description: '', storeId: '', imageUrl: '' });
   const [showUploadSuccess, setShowUploadSuccess] = useState(false);
   const [showStoreSuccess, setShowStoreSuccess] = useState(false);
+  const [smsStatus, setSmsStatus] = useState<{ success: boolean; message: string } | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [selectedStoreIdForDetail, setSelectedStoreIdForDetail] = useState<string | null>(null);
 
   const currentStore = stores.find(s => s.adminId === user.id) || stores[0];
+
+  const storeAlerts = useMemo(() => 
+    inventoryAlerts.filter(a => a.storeId === currentStore?.id),
+    [inventoryAlerts, currentStore?.id]
+  );
+
+  const unreadStoreAlertsCount = useMemo(() => 
+    storeAlerts.filter(a => !a.isRead).length,
+    [storeAlerts]
+  );
+
+  const storeStats = useMemo(() => {
+    const closedSessions = sessions.filter(s => s.status === SessionStatus.CLOSED);
+    let missing = 0;
+    let relocation = 0;
+    let purchase = 0;
+
+    closedSessions.forEach(s => {
+      s.items.forEach(item => {
+        if (item.exitDestination === ItemExitDestination.MISSING) missing += item.quantity;
+        if (item.exitDestination === ItemExitDestination.RELOCATION) relocation += item.quantity;
+        if (item.exitDestination === ItemExitDestination.PURCHASE) purchase += item.quantity;
+      });
+    });
+
+    return { missing, relocation, purchase };
+  }, [sessions]);
 
   const handleDownloadInventoryReport = () => {
     const doc = new jsPDF();
@@ -200,6 +244,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       location: newStore.location,
       adminId: adminId,
       config: { fittingRoomsCount: 5 },
+      code: newStore.name.substring(0, 3).toUpperCase() + Math.floor(100 + Math.random() * 900),
       billing: {
         plan: newStore.plan,
         status: BillingStatus.TRIAL,
@@ -240,12 +285,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       storeId: newAdRequest.storeId || stores[0]?.id || '',
       title: newAdRequest.title,
       description: newAdRequest.description,
-      status: 'pending',
-      requestedAt: Date.now()
+      status: isSuperAdmin ? 'running' : 'pending',
+      requestedAt: Date.now(),
+      imageUrl: newAdRequest.imageUrl || `https://picsum.photos/seed/${Math.random()}/800/200`
     };
     setAdRequests([...adRequests, ad]);
     setShowAdRequestModal(false);
-    setNewAdRequest({ title: '', description: '', storeId: '' });
+    setNewAdRequest({ title: '', description: '', storeId: '', imageUrl: '' });
   };
 
   const handleUpdateBilling = (storeId: string, updates: Partial<Store['billing']>) => {
@@ -313,6 +359,52 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       }
     };
     reader.readAsBinaryString(file);
+  };
+
+  const handleSendSMS = async (customerId: string, storeId: string, type: 'retargeting' | 'cross_sell', sku: string, message: string) => {
+    try {
+      setSmsStatus({ success: true, message: 'Enviando SMS...' });
+      
+      const store = stores.find(s => s.id === storeId);
+      const brand = brands.find(b => b.id === store?.brandId);
+      const brandTpoa = brand?.name?.replace(/[^a-zA-Z0-9]/g, '').substring(0, 11) || 'tienda';
+
+      const response = await fetch('/api/sms/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          to: customerId, // customerId is the phone number in this context
+          message,
+          tpoa: brandTpoa,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        const newCampaign: SMSCampaign = {
+          id: `SMS-${Date.now()}`,
+          customerId,
+          storeId,
+          type,
+          sku,
+          message,
+          sentAt: Date.now(),
+          status: 'sent'
+        };
+        setSmsCampaigns(prev => [...prev, newCampaign]);
+        setSmsStatus({ success: true, message: '¡SMS enviado con éxito!' });
+        setTimeout(() => setSmsStatus(null), 3000);
+      } else {
+        throw new Error(data.error || 'Error al enviar SMS');
+      }
+    } catch (error: any) {
+      console.error('Error enviando SMS:', error);
+      setSmsStatus({ success: false, message: `Error: ${error.message}` });
+      setTimeout(() => setSmsStatus(null), 5000);
+    }
   };
 
 
@@ -492,9 +584,101 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       )}
 
+      {/* MODAL HISTORIAL CLIENTE */}
+      {selectedCustomer && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+          <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={() => setSelectedCustomer(null)}></div>
+          <div className="relative bg-white w-full max-w-4xl rounded-[3rem] p-10 shadow-2xl animate-in fade-in zoom-in duration-300 max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <div className="flex justify-between items-center mb-8">
+              <div>
+                <h3 className="text-2xl font-black text-slate-900">Historial de Cliente</h3>
+                <p className="text-sm text-slate-400 font-bold uppercase tracking-widest mt-1">
+                  {selectedCustomer.name || 'Sin Nombre'} • {selectedCustomer.phone}
+                </p>
+              </div>
+              <button onClick={() => setSelectedCustomer(null)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                <X className="w-6 h-6 text-slate-400" />
+              </button>
+            </div>
+
+            <div className="space-y-8">
+              {selectedCustomer.history.slice().reverse().map((session, idx) => (
+                <div key={idx} className="bg-slate-50 rounded-3xl p-6 border border-slate-100">
+                  <div className="flex justify-between items-center mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-white rounded-lg shadow-sm">
+                        <Clock className="w-4 h-4 text-indigo-500" />
+                      </div>
+                      <span className="text-xs font-black text-slate-600 uppercase tracking-widest">
+                        {new Date(session.timestamp).toLocaleString()}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      Probador #{session.fittingRoomId}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <h4 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <CheckCircle2 className="w-3 h-3" />
+                        Prendas Compradas
+                      </h4>
+                      <div className="space-y-2">
+                        {session.itemsSold.length === 0 ? (
+                          <p className="text-[10px] text-slate-400 italic">Ninguna prenda comprada</p>
+                        ) : (
+                          session.itemsSold.map(sku => {
+                            const product = products.find(p => p.sku === sku);
+                            return (
+                              <div key={sku} className="flex items-center gap-3 bg-white p-2 rounded-xl border border-slate-100">
+                                <img src={product?.image} className="w-8 h-8 rounded-lg object-cover" referrerPolicy="no-referrer" />
+                                <div>
+                                  <p className="text-[10px] font-bold text-slate-800">{product?.name || sku}</p>
+                                  <p className="text-[8px] text-slate-400 uppercase font-black">{product?.category}</p>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <X className="w-3 h-3" />
+                        Prendas Dejadas
+                      </h4>
+                      <div className="space-y-2">
+                        {(!session.itemsLeft || session.itemsLeft.length === 0) ? (
+                          <p className="text-[10px] text-slate-400 italic">Ninguna prenda dejada</p>
+                        ) : (
+                          session.itemsLeft.map(sku => {
+                            const product = products.find(p => p.sku === sku);
+                            return (
+                              <div key={sku} className="flex items-center gap-3 bg-white p-2 rounded-xl border border-slate-100 opacity-75">
+                                <img src={product?.image} className="w-8 h-8 rounded-lg object-cover grayscale" referrerPolicy="no-referrer" />
+                                <div>
+                                  <p className="text-[10px] font-bold text-slate-800">{product?.name || sku}</p>
+                                  <p className="text-[8px] text-slate-400 uppercase font-black">{product?.category}</p>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* SIDEBAR DIFERENCIADO */}
-      <aside className={`hidden lg:flex w-80 flex-col transition-all duration-500 ${isSuperAdmin ? 'bg-slate-950 shadow-[20px_0_60px_rgba(0,0,0,0.4)]' : 'bg-slate-900 shadow-xl'}`}>
-        <div className="p-8">
+      <aside className={`fixed inset-y-0 left-0 z-50 lg:relative lg:flex w-80 flex-col transition-all duration-500 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} ${isSuperAdmin ? 'bg-slate-950 shadow-[20px_0_60px_rgba(0,0,0,0.4)]' : 'bg-slate-900 shadow-xl'}`}>
+        <div className="p-8 h-full flex flex-col">
            <div className="flex items-center justify-between mb-10">
               <div className="flex items-center gap-4">
                  <div className={`${theme.primary} p-3 rounded-2xl shadow-2xl transform hover:rotate-6 transition-all`}>
@@ -507,84 +691,159 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                    </p>
                  </div>
               </div>
-              <button 
-                onClick={onLogout}
-                className="p-2 rounded-xl bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-all group"
-                title="Volver al Inicio"
-              >
-                <Home className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={onLogout}
+                  className="p-2 rounded-xl bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-all group"
+                  title="Volver al Inicio"
+                >
+                  <Home className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                </button>
+                <button 
+                  onClick={() => setIsSidebarOpen(false)}
+                  className="lg:hidden p-2 rounded-xl bg-white/5 text-slate-400 hover:text-white transition-all"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
            </div>
            
-           <nav className="space-y-2">
+           <nav className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-2">
              {isSuperAdmin ? (
                <>
-                 <SidebarItem active={activeTab === 'global'} onClick={() => setActiveTab('global')} icon={<Activity />} label="Visión Global" theme={theme} />
-                 <SidebarItem active={activeTab === 'brands'} onClick={() => setActiveTab('brands')} icon={<Crown />} label="Marcas / Clientes" theme={theme} />
-                 <SidebarItem active={activeTab === 'stores'} onClick={() => setActiveTab('stores')} icon={<Building2 />} label="Sedes / Tiendas" theme={theme} />
-                 <SidebarItem active={activeTab === 'ads'} onClick={() => setActiveTab('ads')} icon={<Megaphone />} label="Publicidad" theme={theme} />
-                 <SidebarItem active={activeTab === 'billing'} onClick={() => setActiveTab('billing')} icon={<CreditCard />} label="Facturación" theme={theme} />
-                 <SidebarItem active={activeTab === 'customers'} onClick={() => setActiveTab('customers')} icon={<Users />} label="Clientes Global" theme={theme} />
-                 <SidebarItem active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={<Users />} label="Directorio Admin" theme={theme} />
-                 <SidebarItem active={activeTab === 'security'} onClick={() => setActiveTab('security')} icon={<ShieldCheck />} label="Seguridad" theme={theme} />
+                 <SidebarItem active={activeTab === 'global'} onClick={() => { setActiveTab('global'); setIsSidebarOpen(false); }} icon={<Activity />} label="Visión Global" theme={theme} />
+                 <SidebarItem active={activeTab === 'brands'} onClick={() => { setActiveTab('brands'); setIsSidebarOpen(false); }} icon={<Crown />} label="Marcas / Clientes" theme={theme} />
+                 <SidebarItem active={activeTab === 'stores'} onClick={() => { setActiveTab('stores'); setIsSidebarOpen(false); }} icon={<Building2 />} label="Sedes / Tiendas" theme={theme} />
+                 <SidebarItem active={activeTab === 'ads'} onClick={() => { setActiveTab('ads'); setIsSidebarOpen(false); }} icon={<Megaphone />} label="Publicidad" theme={theme} />
+                 <SidebarItem active={activeTab === 'billing'} onClick={() => { setActiveTab('billing'); setIsSidebarOpen(false); }} icon={<CreditCard />} label="Facturación" theme={theme} />
+                 <SidebarItem active={activeTab === 'customers'} onClick={() => { setActiveTab('customers'); setIsSidebarOpen(false); }} icon={<Users />} label="Clientes Global" theme={theme} />
+                 <SidebarItem active={activeTab === 'users'} onClick={() => { setActiveTab('users'); setIsSidebarOpen(false); }} icon={<Users />} label="Directorio Admin" theme={theme} />
+                 <SidebarItem active={activeTab === 'security'} onClick={() => { setActiveTab('security'); setIsSidebarOpen(false); }} icon={<ShieldCheck />} label="Seguridad" theme={theme} />
                </>
              ) : (
                <>
-                 <SidebarItem active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<BarChart3 />} label="Mi Tienda" theme={theme} />
-                 <SidebarItem active={activeTab === 'inventory'} onClick={() => setActiveTab('inventory')} icon={<Package />} label="Control Stock" theme={theme} />
-                 <SidebarItem active={activeTab === 'ads'} onClick={() => setActiveTab('ads')} icon={<Megaphone />} label="Publicidad" theme={theme} />
-                 <SidebarItem active={activeTab === 'customers'} onClick={() => setActiveTab('customers')} icon={<Users />} label="Clientes" theme={theme} />
-                  <SidebarItem active={activeTab === 'staff'} onClick={() => setActiveTab('staff')} icon={<Users />} label="Mi Equipo" theme={theme} />
-                 <SidebarItem active={activeTab === 'config'} onClick={() => setActiveTab('config')} icon={<Settings />} label="Configuración" theme={theme} />
-                  <SidebarItem active={activeTab === 'billing'} onClick={() => setActiveTab('billing')} icon={<CreditCard />} label="Mi Factura" theme={theme} />
-                  <SidebarItem active={activeTab === 'audit'} onClick={() => setActiveTab('audit')} icon={<History />} label="Arqueo Diario" theme={theme} />
+                 <SidebarItem active={activeTab === 'overview'} onClick={() => { setActiveTab('overview'); setIsSidebarOpen(false); }} icon={<BarChart3 />} label="Mi Tienda" theme={theme} />
+                 <SidebarItem active={activeTab === 'inventory'} onClick={() => { setActiveTab('inventory'); setIsSidebarOpen(false); }} icon={<Package />} label="Control Stock" theme={theme} />
+                 <SidebarItem active={activeTab === 'ads'} onClick={() => { setActiveTab('ads'); setIsSidebarOpen(false); }} icon={<Megaphone />} label="Publicidad" theme={theme} />
+                 <SidebarItem active={activeTab === 'customers'} onClick={() => { setActiveTab('customers'); setIsSidebarOpen(false); }} icon={<Users />} label="Clientes" theme={theme} />
+                  <SidebarItem active={activeTab === 'staff'} onClick={() => { setActiveTab('staff'); setIsSidebarOpen(false); }} icon={<Users />} label="Mi Equipo" theme={theme} />
+                 <SidebarItem active={activeTab === 'config'} onClick={() => { setActiveTab('config'); setIsSidebarOpen(false); }} icon={<Settings />} label="Configuración" theme={theme} />
+                  <SidebarItem active={activeTab === 'billing'} onClick={() => { setActiveTab('billing'); setIsSidebarOpen(false); }} icon={<CreditCard />} label="Mi Factura" theme={theme} />
+                  <SidebarItem active={activeTab === 'audit'} onClick={() => { setActiveTab('audit'); setIsSidebarOpen(false); }} icon={<History />} label="Arqueo Diario" theme={theme} />
+                  <SidebarItem 
+                    active={activeTab === 'alerts'} 
+                    onClick={() => { 
+                      setActiveTab('alerts'); 
+                      setIsSidebarOpen(false);
+                      setInventoryAlerts(prev => prev.map(a => a.storeId === currentStore?.id ? { ...a, isRead: true } : a));
+                    }} 
+                    icon={<Bell />} 
+                    label="Alertas" 
+                    theme={theme} 
+                    badge={unreadStoreAlertsCount}
+                  />
                </>
              )}
            </nav>
-        </div>
-        
-        <div className="mt-auto p-8 border-t border-white/5 bg-black/20">
-           <div className="flex items-center gap-4 mb-8">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg text-white shadow-2xl ${theme.primary}`}>
-                {user.name.charAt(0)}
+
+           <div className="mt-8 pt-8 border-t border-white/5">
+              <div className="flex items-center gap-4 mb-8">
+                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg text-white shadow-2xl ${theme.primary}`}>
+                   {user.name.charAt(0)}
+                 </div>
+                 <div>
+                    <p className="text-sm font-black text-white">{user.name}</p>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                      {isSuperAdmin ? 'Acceso Nivel 0' : 'Sede Regional 01'}
+                    </p>
+                 </div>
               </div>
-              <div>
-                 <p className="text-sm font-black text-white">{user.name}</p>
-                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                   {isSuperAdmin ? 'Acceso Nivel 0' : 'Sede Regional 01'}
-                 </p>
-              </div>
+              <button onClick={onLogout} className="w-full flex items-center justify-center gap-3 py-4 rounded-xl border border-white/10 text-slate-400 hover:text-white hover:bg-white/5 transition-all text-xs font-black uppercase tracking-widest">
+                <LogOut className="w-4 h-4" />
+                Cerrar Sesión
+              </button>
            </div>
-           <button onClick={onLogout} className="w-full flex items-center justify-center gap-3 py-4 rounded-xl border border-white/10 text-slate-400 hover:text-white hover:bg-white/5 transition-all text-xs font-black uppercase tracking-widest">
-             <LogOut className="w-4 h-4" />
-             Cerrar Sesión
-           </button>
         </div>
       </aside>
 
+      {/* MOBILE OVERLAY */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-40 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        ></div>
+      )}
+
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 overflow-y-auto">
-        <header className="bg-white/80 backdrop-blur-xl border-b border-slate-200 px-10 py-6 sticky top-0 z-30 flex flex-col md:flex-row justify-between items-center gap-6">
-          <div className="flex items-center gap-4">
-             <div className={`p-2 rounded-lg ${isSuperAdmin ? 'bg-amber-50' : 'bg-indigo-50'}`}>
-                {isSuperAdmin ? <Layers className="w-5 h-5 text-amber-600" /> : <MapPin className="w-5 h-5 text-indigo-600" />}
-             </div>
-             <div>
-                <h2 className="text-2xl font-black text-slate-900 tracking-tight leading-none capitalize">
-                   {activeTab.replace('_', ' ')}
-                </h2>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1.5">
-                  {isSuperAdmin ? 'Consola de Administración Central' : 'Panel de Control Local'}
-                </p>
+      <main className="flex-1 overflow-y-auto w-full relative">
+        {/* NOTIFICACIÓN SMS */}
+        {smsStatus && (
+          <div className={`fixed top-10 right-10 z-[100] px-6 py-4 rounded-2xl shadow-2xl border flex items-center gap-4 animate-in slide-in-from-top-10 duration-500 ${
+            smsStatus.success ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700'
+          }`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+              smsStatus.success ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'
+            }`}>
+              {smsStatus.success ? <Check className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+            </div>
+            <p className="text-sm font-black uppercase tracking-widest">{smsStatus.message}</p>
+          </div>
+        )}
+        {/* Banner Publicitario Dinámico */}
+        {activeTab !== 'ads' && adRequests.filter(ad => (ad.status === 'running' || ad.status === 'active') && (!ad.storeId || ad.storeId === currentStore?.id)).length > 0 && (
+          <div className="px-4 sm:px-6 lg:px-10 pt-6">
+            <div className="relative group overflow-hidden rounded-[2.5rem] bg-slate-900 shadow-2xl shadow-indigo-200/50 h-32 sm:h-40">
+              {adRequests.filter(ad => (ad.status === 'running' || ad.status === 'active') && (!ad.storeId || ad.storeId === currentStore?.id)).map((ad, idx) => (
+                <div key={ad.id} className={`${idx === 0 ? 'block' : 'hidden'} w-full relative h-full overflow-hidden`}>
+                  <img 
+                    src={ad.imageUrl} 
+                    alt={ad.title} 
+                    className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-700"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent"></div>
+                  <div className="absolute bottom-0 left-0 p-6 w-full">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Sparkles className="w-3 h-3 text-amber-400 fill-amber-400" />
+                      <span className="text-[8px] font-black text-amber-400 uppercase tracking-[0.3em]">Campaña Activa</span>
+                    </div>
+                    <h2 className="text-lg sm:text-xl font-black text-white tracking-tight">{ad.title}</h2>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <header className="bg-white/80 backdrop-blur-xl border-b border-slate-200 px-4 sm:px-6 lg:px-10 py-4 sm:py-6 sticky top-0 z-30 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 sm:gap-6">
+          <div className="flex items-center justify-between w-full md:w-auto gap-4">
+             <div className="flex items-center gap-4">
+                <button 
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="lg:hidden p-2 bg-slate-100 rounded-xl text-slate-600"
+                >
+                  <Menu className="w-6 h-6" />
+                </button>
+                <div className={`p-2 rounded-lg ${isSuperAdmin ? 'bg-amber-50' : 'bg-indigo-50'}`}>
+                    {isSuperAdmin ? <Layers className="w-5 h-5 text-amber-600" /> : <MapPin className="w-5 h-5 text-indigo-600" />}
+                </div>
+                <div>
+                    <h2 className="text-xl lg:text-2xl font-black text-slate-900 tracking-tight leading-none capitalize">
+                      {activeTab.replace('_', ' ')}
+                    </h2>
+                    <p className="hidden sm:block text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1.5">
+                      {isSuperAdmin ? 'Consola de Administración Central' : 'Panel de Control Local'}
+                    </p>
+                </div>
              </div>
           </div>
           
-          <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200/60">
+          <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200/60 overflow-x-auto max-w-full no-scrollbar">
              {(['day', 'week', 'month'] as TimeRange[]).map(range => (
                <button 
                 key={range}
                 onClick={() => setTimeRange(range)}
-                className={`px-6 py-2 rounded-xl text-[10px] font-black transition-all ${timeRange === range ? 'bg-white text-slate-900 shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+                className={`px-4 lg:px-6 py-2 rounded-xl text-[10px] font-black transition-all whitespace-nowrap ${timeRange === range ? 'bg-white text-slate-900 shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
                >
                  {range.toUpperCase()}
                </button>
@@ -592,12 +851,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </header>
 
-        <div className="p-10 max-w-7xl mx-auto pb-32 animate-in fade-in duration-700">
+        <div className="p-4 lg:p-10 max-w-7xl mx-auto pb-32 animate-in fade-in duration-700">
           
           {/* VISTAS PARA SUPER ADMIN */}
           {isSuperAdmin && activeTab === 'global' && (
             <div className="space-y-10">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                 <StatCard label="Ventas Red" value={stats.sales.toString()} icon={<Activity />} theme="amber" />
                 <StatCard label="Tiendas Activas" value={stores.length.toString()} icon={<Building2 />} theme="amber" />
                 <StatCard label="Conversión Global" value={`${stats.conversion}%`} icon={<TrendingUp />} theme="amber" />
@@ -688,15 +947,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <h3 className="text-2xl font-black text-slate-900">Gestión de Publicidad</h3>
                   <p className="text-sm text-slate-400 font-medium">Solicitudes y campañas activas en la red de probadores</p>
                 </div>
-                {!isSuperAdmin && (
+                <div className="flex items-center gap-4">
                   <button 
                     onClick={() => setShowAdRequestModal(true)}
                     className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center gap-2"
                   >
                     <Megaphone className="w-4 h-4" />
-                    Solicitar Campaña
+                    {isSuperAdmin ? 'Nueva Pauta' : 'Solicitar Campaña'}
                   </button>
-                )}
+                </div>
               </div>
 
               <div className="bg-white rounded-[3rem] border border-slate-200 shadow-xl overflow-hidden">
@@ -719,8 +978,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       adRequests.map(ad => (
                         <tr key={ad.id} className="hover:bg-slate-50 transition-colors">
                           <td className="px-10 py-6">
-                            <p className="font-bold text-slate-800">{ad.title}</p>
-                            <p className="text-[10px] text-slate-400 truncate max-w-xs">{ad.description}</p>
+                            <div className="flex items-center gap-4">
+                              <div className="w-16 h-10 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 flex-shrink-0">
+                                <img src={ad.imageUrl} alt={ad.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              </div>
+                              <div>
+                                <p className="font-bold text-slate-800">{ad.title}</p>
+                                <p className="text-[10px] text-slate-400 truncate max-w-xs">{ad.description}</p>
+                              </div>
+                            </div>
                           </td>
                           <td className="px-10 py-6">
                             <p className="text-xs font-black text-slate-600 uppercase tracking-widest">
@@ -732,20 +998,30 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           </td>
                           <td className="px-10 py-6">
                             <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
-                              ad.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 
+                              ad.status === 'running' || ad.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 
                               ad.status === 'pending' ? 'bg-amber-50 text-amber-600' : 'bg-slate-50 text-slate-400'
                             }`}>
-                              {ad.status}
+                              {ad.status === 'running' ? 'En Curso' : 
+                               ad.status === 'active' ? 'Activa' : 
+                               ad.status === 'pending' ? 'Pendiente' : ad.status}
                             </span>
                           </td>
                           <td className="px-10 py-6 text-sm text-slate-500">{new Date(ad.requestedAt).toLocaleDateString()}</td>
                           <td className="px-10 py-6 text-right">
                             {isSuperAdmin && ad.status === 'pending' && (
                               <button 
-                                onClick={() => setAdRequests(prev => prev.map(a => a.id === ad.id ? {...a, status: 'active'} : a))}
+                                onClick={() => setAdRequests(prev => prev.map(a => a.id === ad.id ? {...a, status: 'running'} : a))}
                                 className="px-4 py-2 bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 transition-all"
                               >
                                 Publicar
+                              </button>
+                            )}
+                            {isSuperAdmin && ad.status === 'running' && (
+                              <button 
+                                onClick={() => setAdRequests(prev => prev.map(a => a.id === ad.id ? {...a, status: 'completed'} : a))}
+                                className="px-4 py-2 bg-slate-200 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-300 transition-all"
+                              >
+                                Finalizar
                               </button>
                             )}
                             {!isSuperAdmin && (
@@ -789,11 +1065,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <div className="mt-8 pt-6 border-t border-slate-100 flex justify-between items-center">
                        <div>
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Plan</p>
-                          <p className="text-sm font-bold text-slate-700 uppercase">{s.billing.plan}</p>
+                          <p className="text-sm font-bold text-slate-700 uppercase">{s.billing?.plan || 'Trial'}</p>
                        </div>
-                       <button className="p-3 bg-slate-50 rounded-xl text-slate-400 hover:text-amber-500 transition-colors">
-                          <Settings className="w-5 h-5" />
-                       </button>
+                       <div className="flex gap-2">
+                         <button 
+                           onClick={() => setSelectedStoreIdForDetail(s.id)}
+                           className="p-3 bg-indigo-50 rounded-xl text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all"
+                           title="Ver detalle de sede"
+                         >
+                            <ArrowUpRight className="w-5 h-5" />
+                         </button>
+                         <button className="p-3 bg-slate-50 rounded-xl text-slate-400 hover:text-amber-500 transition-colors">
+                            <Settings className="w-5 h-5" />
+                         </button>
+                       </div>
                     </div>
                  </div>
                ))}
@@ -831,43 +1116,45 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div className="bg-white rounded-[3rem] border border-slate-200 shadow-xl overflow-hidden">
                 <div className="p-8 border-b border-slate-100 flex justify-between items-center">
                   <h3 className="text-xl font-black text-slate-900">Estado de Facturación por Sede</h3>
-                  <button className="text-xs font-black uppercase tracking-widest text-amber-500 hover:underline">Descargar Reporte Global</button>
+                  <button className="hidden sm:block text-xs font-black uppercase tracking-widest text-amber-500 hover:underline">Descargar Reporte Global</button>
                 </div>
-                <table className="w-full text-left">
-                  <thead className="bg-slate-50">
-                    <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                      <th className="px-10 py-6">Sede</th>
-                      <th className="px-10 py-6">Plan</th>
-                      <th className="px-10 py-6">Estado</th>
-                      <th className="px-10 py-6">Próximo Cobro</th>
-                      <th className="px-10 py-6 text-right">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {stores.map(s => (
-                      <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-10 py-6 font-bold text-slate-800">{s.name}</td>
-                        <td className="px-10 py-6 text-xs font-black uppercase text-slate-500">{s.billing.plan}</td>
-                        <td className="px-10 py-6">
-                          <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${
-                            s.billing.status === BillingStatus.PAID ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
-                          }`}>
-                            {s.billing.status}
-                          </span>
-                        </td>
-                        <td className="px-10 py-6 text-sm text-slate-500">{new Date(s.billing.nextBillingDate).toLocaleDateString()}</td>
-                        <td className="px-10 py-6 text-right">
-                          <button 
-                            onClick={() => setEditingStoreBilling(s)}
-                            className="p-2 hover:bg-amber-50 text-slate-400 hover:text-amber-500 rounded-lg transition-all"
-                          >
-                            <Settings className="w-5 h-5" />
-                          </button>
-                        </td>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-50">
+                      <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        <th className="px-6 lg:px-10 py-6">Sede</th>
+                        <th className="px-6 lg:px-10 py-6">Plan</th>
+                        <th className="px-6 lg:px-10 py-6">Estado</th>
+                        <th className="px-6 lg:px-10 py-6">Próximo Cobro</th>
+                        <th className="px-6 lg:px-10 py-6 text-right">Acciones</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {stores.map(s => (
+                        <tr key={s.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-6 lg:px-10 py-6 font-bold text-slate-800 whitespace-nowrap">{s.name}</td>
+                          <td className="px-6 lg:px-10 py-6 text-xs font-black uppercase text-slate-500">{s.billing.plan}</td>
+                          <td className="px-6 lg:px-10 py-6">
+                            <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${
+                              s.billing.status === BillingStatus.PAID ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
+                            }`}>
+                              {s.billing.status}
+                            </span>
+                          </td>
+                          <td className="px-6 lg:px-10 py-6 text-sm text-slate-500 whitespace-nowrap">{new Date(s.billing.nextBillingDate).toLocaleDateString()}</td>
+                          <td className="px-6 lg:px-10 py-6 text-right">
+                            <button 
+                              onClick={() => setEditingStoreBilling(s)}
+                              className="p-2 hover:bg-amber-50 text-slate-400 hover:text-amber-500 rounded-lg transition-all"
+                            >
+                              <Settings className="w-5 h-5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
@@ -875,11 +1162,41 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {/* VISTAS PARA STORE ADMIN */}
           {!isSuperAdmin && activeTab === 'overview' && (
              <div className="space-y-10">
-               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                  <StatCard label="Visitas Hoy" value={stats.totalSessions.toString()} icon={<Users />} theme="indigo" />
                  <StatCard label="En Probador" value={stats.activeSessions.toString()} icon={<Clock />} theme="indigo" />
                  <StatCard label="Ventas Sede" value={stats.sales.toString()} icon={<Plus />} theme="emerald" />
                  <StatCard label="Conversión" value={`${stats.conversion}%`} icon={<TrendingUp />} theme="indigo" />
+               </div>
+
+               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+                 <div className="bg-rose-50 p-6 rounded-[2rem] border border-rose-100 flex items-center justify-between">
+                   <div>
+                     <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">Faltantes</p>
+                     <p className="text-3xl font-black text-rose-600">{storeStats.missing}</p>
+                   </div>
+                   <div className="w-12 h-12 bg-rose-500 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-rose-200">
+                     <AlertTriangle className="w-6 h-6" />
+                   </div>
+                 </div>
+                 <div className="bg-amber-50 p-6 rounded-[2rem] border border-amber-100 flex items-center justify-between">
+                   <div>
+                     <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-1">Reubicación</p>
+                     <p className="text-3xl font-black text-amber-600">{storeStats.relocation}</p>
+                   </div>
+                   <div className="w-12 h-12 bg-amber-500 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-amber-200">
+                     <ArrowRightLeft className="w-6 h-6" />
+                   </div>
+                 </div>
+                 <div className="bg-emerald-50 p-6 rounded-[2rem] border border-emerald-100 flex items-center justify-between">
+                   <div>
+                     <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Ventas</p>
+                     <p className="text-3xl font-black text-emerald-600">{storeStats.purchase}</p>
+                   </div>
+                   <div className="w-12 h-12 bg-emerald-500 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-200">
+                     <Plus className="w-6 h-6" />
+                   </div>
+                 </div>
                </div>
 
                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -1028,24 +1345,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead className="bg-slate-50">
-                      <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                        <th className="px-10 py-6">Producto</th>
-                        <th className="px-10 py-6">Referencia</th>
-                        <th className="px-10 py-6 text-center">Disponible</th>
-                        <th className="px-10 py-6 text-right">Acción</th>
+                      <tr className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        <th className="px-6 sm:px-10 py-4 sm:py-6">Producto</th>
+                        <th className="px-6 sm:px-10 py-4 sm:py-6">Referencia</th>
+                        <th className="px-6 sm:px-10 py-4 sm:py-6 text-center">Disponible</th>
+                        <th className="px-6 sm:px-10 py-4 sm:py-6 text-right">Acción</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {products.map((p, i) => (
                         <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="px-10 py-5 font-black text-slate-800">{p.name}</td>
-                          <td className="px-10 py-5 font-mono text-xs text-slate-400">{p.sku}</td>
-                          <td className="px-10 py-5 text-center">
-                            <span className={`px-4 py-1.5 rounded-lg text-xs font-black ${p.stock < 10 ? 'bg-rose-50 text-rose-500' : 'bg-emerald-50 text-emerald-500'}`}>
+                          <td className="px-6 sm:px-10 py-4 sm:py-5 font-black text-slate-800 text-sm sm:text-base">{p.name}</td>
+                          <td className="px-6 sm:px-10 py-4 sm:py-5 font-mono text-[10px] sm:text-xs text-slate-400">{p.sku}</td>
+                          <td className="px-6 sm:px-10 py-4 sm:py-5 text-center">
+                            <span className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-black ${p.stock < 10 ? 'bg-rose-50 text-rose-500' : 'bg-emerald-50 text-emerald-500'}`}>
                               {p.stock} Uds
                             </span>
                           </td>
-                          <td className="px-10 py-5 text-right">
+                          <td className="px-6 sm:px-10 py-4 sm:py-5 text-right">
                              <button className="p-2 text-slate-300 hover:text-indigo-600"><Settings className="w-4 h-4" /></button>
                           </td>
                         </tr>
@@ -1058,30 +1375,58 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           {(activeTab === 'users' || activeTab === 'staff') && (
             <div className="space-y-8">
-              <div className="flex justify-between items-end mb-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-4">
                  <div>
                     <h3 className="text-2xl font-black text-slate-900">
                        {isSuperAdmin ? 'Directorio de Usuarios' : 'Mi Equipo de Trabajo'}
                     </h3>
                     <p className="text-sm text-slate-400 font-medium">Gestión de accesos y roles del personal</p>
+                    {!isSuperAdmin && currentStore && (
+                      <div className="mt-2 flex items-center gap-2 bg-indigo-50 px-4 py-2 rounded-xl border border-indigo-100 w-fit">
+                        <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Código de Tienda:</p>
+                        <p className="text-sm font-black text-indigo-700 tracking-[0.2em]">{currentStore.code}</p>
+                      </div>
+                    )}
                  </div>
-                 <button className={`px-6 py-3 rounded-xl text-white font-black text-xs uppercase tracking-widest shadow-xl transition-all ${theme.primary}`}>
+                 <button 
+                  onClick={() => {
+                    if (!isSuperAdmin) {
+                      const name = prompt('Nombre del Staff:');
+                      const email = prompt('Email del Staff:');
+                      if (name && email) {
+                        const newUser: User = {
+                          id: Math.random().toString(36).substr(2, 9),
+                          name,
+                          email,
+                          role: Role.STAFF,
+                          storeId: currentStore?.id,
+                          isFirstLogin: true
+                        };
+                        setUsers(prev => [...prev, newUser]);
+                      }
+                    }
+                  }}
+                  className={`w-full sm:w-auto px-6 py-3 rounded-xl text-white font-black text-xs uppercase tracking-widest shadow-xl transition-all ${theme.primary}`}
+                 >
                     Registrar Nuevo
                  </button>
               </div>
 
               {/* Resumen Visual por Rol */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6 mb-10">
                 {Object.values(Role).map(role => {
-                  const count = users.filter(u => u.role === role).length;
+                  const count = users.filter(u => {
+                    if (isSuperAdmin) return u.role === role;
+                    return u.role === role && u.storeId === currentStore?.id;
+                  }).length;
                   if (count === 0 && !isSuperAdmin) return null;
                   return (
-                    <div key={role} className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden group hover:shadow-xl transition-all">
-                      <div className={`absolute top-0 right-0 w-24 h-24 ${theme.primary} opacity-5 rounded-full -mr-12 -mt-12 transition-transform group-hover:scale-150`}></div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">{role.replace('_', ' ')}</p>
+                    <div key={role} className="bg-white p-6 sm:p-8 rounded-2xl sm:rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden group hover:shadow-xl transition-all">
+                      <div className={`absolute top-0 right-0 w-20 h-20 sm:w-24 sm:h-24 ${theme.primary} opacity-5 rounded-full -mr-10 -mt-10 sm:-mr-12 sm:-mt-12 transition-transform group-hover:scale-150`}></div>
+                      <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">{role.replace('_', ' ')}</p>
                       <div className="flex items-baseline gap-2">
-                        <p className="text-4xl font-black text-slate-900">{count}</p>
-                        <p className="text-xs font-bold text-slate-400">Usuarios</p>
+                        <p className="text-3xl sm:text-4xl font-black text-slate-900">{count}</p>
+                        <p className="text-[10px] sm:text-xs font-bold text-slate-400">Usuarios</p>
                       </div>
                     </div>
                   );
@@ -1090,7 +1435,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
               {/* Agrupación por Rol */}
               {Object.values(Role).map(role => {
-                const usersInRole = users.filter(u => u.role === role);
+                const usersInRole = users.filter(u => {
+                  if (isSuperAdmin) return u.role === role;
+                  return u.role === role && u.storeId === currentStore?.id;
+                });
                 if (usersInRole.length === 0) return null;
                 
                 return (
@@ -1100,9 +1448,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">{role.replace('_', ' ')}</h4>
                       <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-500 font-bold">{usersInRole.length}</span>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                       {usersInRole.map(u => (
-                        <div key={u.id} className="bg-white p-6 rounded-[2.5rem] border border-slate-200 flex items-center gap-5 hover:shadow-2xl hover:-translate-y-1 transition-all group">
+                        <div key={u.id} className="bg-white p-5 sm:p-6 rounded-2xl sm:rounded-[2.5rem] border border-slate-200 flex items-center gap-4 sm:gap-5 hover:shadow-2xl hover:-translate-y-1 transition-all group">
                           <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg transform group-hover:rotate-6 transition-all ${theme.primary}`}>
                             {u.name.charAt(0)}
                           </div>
@@ -1136,18 +1484,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead className="bg-slate-50">
-                      <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                        <th className="px-10 py-6">Teléfono del Cliente</th>
-                        <th className="px-10 py-6 text-center">Visitas Totales</th>
-                        <th className="px-10 py-6 text-center">Prendas Probadas</th>
-                        <th className="px-10 py-6 text-center">Prendas Compradas</th>
-                        <th className="px-10 py-6 text-right">Tasa de Conversión</th>
+                      <tr className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        <th className="px-6 sm:px-10 py-4 sm:py-6">Cliente</th>
+                        <th className="px-6 sm:px-10 py-4 sm:py-6">Teléfono</th>
+                        <th className="px-6 sm:px-10 py-4 sm:py-6 text-center">Visitas Totales</th>
+                        <th className="px-6 sm:px-10 py-4 sm:py-6 text-center">Prendas Probadas</th>
+                        <th className="px-6 sm:px-10 py-4 sm:py-6 text-center">Prendas Compradas</th>
+                        <th className="px-6 sm:px-10 py-4 sm:py-6 text-right">Tasa de Conversión</th>
+                        <th className="px-6 sm:px-10 py-4 sm:py-6 text-right">Acciones</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {customers.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="px-10 py-20 text-center">
+                          <td colSpan={7} className="px-10 py-20 text-center">
                             <div className="flex flex-col items-center gap-4">
                               <Users className="w-12 h-12 text-slate-200" />
                               <p className="text-slate-400 font-medium">No hay clientes registrados aún.</p>
@@ -1161,21 +1511,38 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           const conversion = totalEntered > 0 ? ((totalSold / totalEntered) * 100).toFixed(1) : '0';
                           return (
                             <tr key={i} className="hover:bg-slate-50/50 transition-colors group">
-                              <td className="px-10 py-6">
-                                <div className="flex items-center gap-4">
-                                  <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
-                                    <Smartphone className="w-5 h-5" />
+                              <td className="px-6 sm:px-10 py-4 sm:py-6">
+                                <div className="flex items-center gap-3 sm:gap-4">
+                                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
+                                    <UserIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                                   </div>
-                                  <span className="font-black text-slate-800">{c.phone}</span>
+                                  <span className="font-black text-slate-800 text-sm sm:text-base">{c.name || 'Sin Nombre'}</span>
                                 </div>
                               </td>
-                              <td className="px-10 py-6 text-center font-bold text-slate-600">{c.history.length}</td>
-                              <td className="px-10 py-6 text-center font-medium text-slate-500">{totalEntered}</td>
-                              <td className="px-10 py-6 text-center font-medium text-emerald-600">{totalSold}</td>
-                              <td className="px-10 py-6 text-right">
-                                <span className="px-4 py-2 rounded-xl text-xs font-black bg-indigo-50 text-indigo-600 border border-indigo-100">
+                              <td className="px-6 sm:px-10 py-4 sm:py-6">
+                                <div className="flex items-center gap-3 sm:gap-4">
+                                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-300">
+                                    <Smartphone className="w-3.5 h-3.5 sm:w-4 h-4" />
+                                  </div>
+                                  <span className="font-bold text-slate-600 text-sm sm:text-base">{c.phone}</span>
+                                </div>
+                              </td>
+                              <td className="px-6 sm:px-10 py-4 sm:py-6 text-center font-bold text-slate-600 text-sm sm:text-base">{c.history.length}</td>
+                              <td className="px-6 sm:px-10 py-4 sm:py-6 text-center font-medium text-slate-500 text-sm sm:text-base">{totalEntered}</td>
+                              <td className="px-6 sm:px-10 py-4 sm:py-6 text-center font-medium text-emerald-600 text-sm sm:text-base">{totalSold}</td>
+                              <td className="px-6 sm:px-10 py-4 sm:py-6 text-right">
+                                <span className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-xs font-black bg-indigo-50 text-indigo-600 border border-indigo-100">
                                   {conversion}%
                                 </span>
+                              </td>
+                              <td className="px-6 sm:px-10 py-4 sm:py-6 text-right">
+                                <button 
+                                  onClick={() => setSelectedCustomer(c)}
+                                  className="p-2 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-xl transition-all"
+                                  title="Ver Historial Detallado"
+                                >
+                                  <History className="w-4 h-4 sm:w-5 h-5" />
+                                </button>
                               </td>
                             </tr>
                           );
@@ -1217,32 +1584,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           )}
 
           {!isSuperAdmin && activeTab === 'billing' && (
-            <div className="max-w-4xl space-y-8">
+            <div className="max-w-4xl space-y-8 pb-20">
               <div className="bg-slate-900 rounded-[3rem] p-10 text-white shadow-2xl relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full -mr-32 -mt-32 blur-3xl"></div>
                 <div className="relative z-10">
                   <div className="flex justify-between items-start mb-10">
                     <div>
                       <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-2">Estado de Suscripción</p>
-                      <h3 className="text-3xl font-black">Plan {currentStore?.billing.plan.toUpperCase()} Activo</h3>
+                      <h3 className="text-3xl font-black">Plan {currentStore?.billing?.plan.toUpperCase()} Activo</h3>
                     </div>
                     <div className={`px-4 py-2 rounded-xl border text-xs font-black uppercase tracking-widest ${
-                      currentStore?.billing.status === BillingStatus.PAID 
+                      currentStore?.billing?.status === BillingStatus.PAID 
                         ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' 
                         : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
                     }`}>
-                      {currentStore?.billing.status === BillingStatus.PAID ? 'Al día' : 'Pendiente / Trial'}
+                      {currentStore?.billing?.status === BillingStatus.PAID ? 'Al día' : 'Pendiente / Trial'}
                     </div>
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
                     <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Próximo Pago</p>
-                      <p className="text-xl font-bold">{currentStore ? new Date(currentStore.billing.nextBillingDate).toLocaleDateString() : 'N/A'}</p>
+                      <p className="text-xl font-bold">{currentStore?.billing ? new Date(currentStore.billing.nextBillingDate).toLocaleDateString() : 'N/A'}</p>
                     </div>
                     <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Monto Mensual</p>
-                      <p className="text-xl font-bold">$49.00</p>
+                      <p className="text-xl font-bold">${currentStore?.billing?.price.toFixed(2) || '0.00'}</p>
                     </div>
                     <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Método de Pago</p>
@@ -1250,6 +1617,57 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Selección de Planes */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {[
+                  { id: 'basic', name: 'Básico', price: 29, features: ['Hasta 3 Probadores', 'Reportes Básicos', 'Soporte Email'] },
+                  { id: 'pro', name: 'Profesional', price: 49, features: ['Hasta 10 Probadores', 'Reportes Avanzados', 'Soporte 24/7'] },
+                  { id: 'enterprise', name: 'Enterprise', price: 99, features: ['Probadores Ilimitados', 'API Access', 'Account Manager'] }
+                ].map((plan) => (
+                  <div 
+                    key={plan.id}
+                    className={`bg-white p-8 rounded-[2.5rem] border-2 transition-all cursor-pointer hover:shadow-xl ${
+                      currentStore?.billing?.plan === plan.id 
+                        ? 'border-indigo-600 shadow-lg shadow-indigo-100' 
+                        : 'border-slate-100 hover:border-indigo-200'
+                    }`}
+                    onClick={() => {
+                      if (currentStore) {
+                        const updatedStore = {
+                          ...currentStore,
+                          billing: {
+                            ...currentStore.billing!,
+                            plan: plan.id as any,
+                            price: plan.price
+                          }
+                        };
+                        setStores(prev => prev.map(s => s.id === currentStore.id ? updatedStore : s));
+                      }
+                    }}
+                  >
+                    <div className="flex justify-between items-start mb-6">
+                      <div>
+                        <h4 className="font-black text-slate-900">{plan.name}</h4>
+                        <p className="text-2xl font-black text-indigo-600 mt-1">${plan.price}<span className="text-xs text-slate-400 font-bold">/mes</span></p>
+                      </div>
+                      {currentStore?.billing?.plan === plan.id && (
+                        <div className="w-6 h-6 bg-indigo-600 rounded-full flex items-center justify-center">
+                          <CheckCircle2 className="w-4 h-4 text-white" />
+                        </div>
+                      )}
+                    </div>
+                    <ul className="space-y-3">
+                      {plan.features.map((f, i) => (
+                        <li key={i} className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                          <div className="w-1 h-1 bg-indigo-400 rounded-full"></div>
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
               </div>
 
               <div className="bg-white rounded-[3rem] border border-slate-200 p-10 shadow-xl">
@@ -1325,13 +1743,78 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           )}
 
+          {!isSuperAdmin && activeTab === 'alerts' && (
+            <div className="bg-white rounded-[3rem] border border-slate-200 p-10 shadow-xl">
+              <div className="flex justify-between items-center mb-8">
+                <div>
+                  <h3 className="text-2xl font-black text-slate-900">Alertas de Inventario</h3>
+                  <p className="text-slate-400 font-medium">Notificaciones de productos faltantes reportados por el staff.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                   <div className="px-4 py-2 bg-rose-50 text-rose-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-rose-100">
+                     {storeAlerts.length} Alertas Totales
+                   </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {storeAlerts.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-center">
+                    <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mb-6">
+                      <Bell className="w-10 h-10 text-slate-200" />
+                    </div>
+                    <h4 className="text-xl font-black text-slate-900 mb-2">Todo en orden</h4>
+                    <p className="text-slate-400 font-medium">No se han reportado productos faltantes en esta sede.</p>
+                  </div>
+                ) : (
+                  [...storeAlerts].reverse().map(alert => (
+                    <div key={alert.id} className="bg-white border border-slate-100 p-6 rounded-2xl hover:border-rose-500/30 transition-all group flex flex-col md:flex-row md:items-center justify-between gap-6">
+                      <div className="flex items-center gap-6">
+                        <div className="w-14 h-14 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:bg-rose-500 group-hover:text-white transition-all">
+                          <AlertTriangle className="w-7 h-7" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest">Producto Faltante</p>
+                            {!alert.isRead && <span className="w-2 h-2 bg-rose-500 rounded-full animate-pulse"></span>}
+                          </div>
+                          <h4 className="text-lg font-black text-slate-900">{alert.productName}</h4>
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
+                            <p className="text-xs font-bold text-slate-500">SKU: <span className="text-slate-900">{alert.sku}</span></p>
+                            <p className="text-xs font-bold text-slate-500">Reportado por: <span className="text-slate-900">{alert.workerName}</span></p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between md:justify-end gap-6 border-t md:border-t-0 pt-4 md:pt-0 border-slate-50">
+                        <div className="text-right">
+                          <p className="text-xs font-black text-slate-900">{new Date(alert.timestamp).toLocaleDateString()}</p>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{new Date(alert.timestamp).toLocaleTimeString()}</p>
+                        </div>
+                        <button 
+                          onClick={() => {
+                            if(confirm('¿Deseas eliminar esta alerta?')) {
+                              setInventoryAlerts(prev => prev.filter(a => a.id !== alert.id));
+                            }
+                          }}
+                          className="p-3 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
         </div>
 
         {/* MODAL CREAR MARCA */}
         {showCreateBrand && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-sm">
-            <div className="bg-white w-full max-w-md rounded-[3rem] p-10 shadow-2xl animate-in zoom-in duration-300">
-              <h3 className="text-2xl font-black text-slate-900 mb-8">Nueva Marca</h3>
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 bg-slate-950/60 backdrop-blur-sm">
+            <div className="bg-white w-full max-w-md rounded-t-[3rem] sm:rounded-[3rem] p-8 sm:p-10 shadow-2xl animate-in slide-in-from-bottom sm:zoom-in duration-300">
+              <h3 className="text-xl sm:text-2xl font-black text-slate-900 mb-8">Nueva Marca</h3>
               <div className="space-y-6">
                 <div>
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">Nombre de la Marca</label>
@@ -1384,9 +1867,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         {/* MODAL SOLICITAR PUBLICIDAD */}
         {showAdRequestModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-sm">
-            <div className="bg-white w-full max-w-lg rounded-[3rem] p-10 shadow-2xl animate-in zoom-in duration-300">
-              <h3 className="text-2xl font-black text-slate-900 mb-8">Solicitar Campaña Publicitaria</h3>
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 bg-slate-950/60 backdrop-blur-sm">
+            <div className="bg-white w-full max-w-lg rounded-t-[3rem] sm:rounded-[3rem] p-8 sm:p-10 shadow-2xl animate-in slide-in-from-bottom sm:zoom-in duration-300">
+              <h3 className="text-xl sm:text-2xl font-black text-slate-900 mb-8">
+                {isSuperAdmin ? 'Publicar Pauta Publicitaria' : 'Solicitar Campaña Publicitaria'}
+              </h3>
               <div className="space-y-6">
                 <div>
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">Título de la Campaña</label>
@@ -1399,9 +1884,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   />
                 </div>
                 <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">URL de la Imagen (Banner)</label>
+                  <input 
+                    type="text" 
+                    className="w-full px-6 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-2xl font-bold outline-none transition-all"
+                    placeholder="https://ejemplo.com/banner.jpg"
+                    value={newAdRequest.imageUrl}
+                    onChange={(e) => setNewAdRequest({...newAdRequest, imageUrl: e.target.value})}
+                  />
+                  <p className="text-[8px] text-slate-400 mt-2 ml-4 uppercase font-bold">Si se deja vacío, se generará una imagen aleatoria.</p>
+                </div>
+                <div>
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">Descripción / Objetivo</label>
                   <textarea 
-                    className="w-full px-6 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-2xl font-bold outline-none transition-all h-32 resize-none"
+                    className="w-full px-6 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-2xl font-bold outline-none transition-all h-24 resize-none"
                     placeholder="Describe el contenido y dónde quieres que se muestre..."
                     value={newAdRequest.description}
                     onChange={(e) => setNewAdRequest({...newAdRequest, description: e.target.value})}
@@ -1415,7 +1911,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     onChange={(e) => setNewAdRequest({...newAdRequest, storeId: e.target.value})}
                   >
                     <option value="">Todas las Sedes (Global)</option>
-                    {stores.filter(s => s.brandId === brands.find(b => b.ownerId === user.id)?.id).map(s => (
+                    {stores.map(s => (
                       <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
                   </select>
@@ -1431,8 +1927,159 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     onClick={handleCreateAdRequest}
                     className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all"
                   >
-                    Enviar Solicitud
+                    {isSuperAdmin ? 'Publicar Ahora' : 'Enviar Solicitud'}
                   </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* MODAL DETALLE DE SEDE (SUPER ADMIN) */}
+        {selectedStoreIdForDetail && (
+          <div className="fixed inset-0 z-[60] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-0 sm:p-6 overflow-hidden">
+            <div className="bg-slate-50 w-full h-full sm:h-[90vh] max-w-6xl sm:rounded-[3rem] shadow-2xl flex flex-col animate-in zoom-in duration-300">
+              {/* Header */}
+              <div className="p-8 border-b border-slate-200 flex justify-between items-center bg-white sm:rounded-t-[3rem]">
+                <div className="flex items-center gap-6">
+                  <button 
+                    onClick={() => setSelectedStoreIdForDetail(null)}
+                    className="p-3 bg-slate-100 rounded-2xl text-slate-600 hover:bg-slate-200 transition-all"
+                  >
+                    <ArrowLeft className="w-6 h-6" />
+                  </button>
+                  <div>
+                    <h3 className="text-2xl font-black text-slate-900">
+                      {stores.find(s => s.id === selectedStoreIdForDetail)?.name}
+                    </h3>
+                    <p className="text-sm text-slate-400 font-medium">Historial de Clientes y Campañas SMS</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                   <div className="px-4 py-2 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-amber-200">
+                      Sede Activa
+                   </div>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-8 space-y-10">
+                {/* Historial de Clientes */}
+                <div className="space-y-6">
+                  <div className="flex justify-between items-end">
+                    <h4 className="text-xl font-black text-slate-900 uppercase tracking-widest">Historial de Clientes</h4>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Total: {customers.filter(c => sessions.some(s => s.customerId === c.id && s.storeId === selectedStoreIdForDetail)).length} Clientes</p>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 gap-4">
+                    {customers.filter(c => sessions.some(s => s.customerPhone === c.phone && s.storeId === selectedStoreIdForDetail)).map(customer => {
+                      const customerSessions = sessions.filter(s => s.customerPhone === customer.phone && s.storeId === selectedStoreIdForDetail);
+                      const triedOnSkus = Array.from(new Set(customerSessions.flatMap(s => s.products.map(p => p.sku))));
+                      const soldSkus = Array.from(new Set(customerSessions.flatMap(s => s.products.filter(p => p.status === ItemStatus.SOLD).map(p => p.sku))));
+                      const notTakenSkus = triedOnSkus.filter(sku => !soldSkus.includes(sku));
+
+                      return (
+                        <div key={customer.phone} className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-md transition-all">
+                          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+                            <div className="flex items-center gap-6">
+                              <div className="w-16 h-16 bg-slate-900 text-amber-500 rounded-[1.5rem] flex items-center justify-center flex-shrink-0">
+                                <UserIcon className="w-8 h-8" />
+                              </div>
+                              <div>
+                                <h5 className="text-lg font-black text-slate-900">{customer.name || 'Sin Nombre'}</h5>
+                                <p className="text-sm font-bold text-slate-400">{customer.phone}</p>
+                                <div className="flex gap-2 mt-2">
+                                  <span className="px-2 py-1 bg-indigo-50 text-indigo-600 text-[9px] font-black rounded uppercase tracking-widest">
+                                    {customerSessions.length} Visitas
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-8">
+                              {/* Prendas No Llevadas (Retargeting) */}
+                              <div className="space-y-3">
+                                <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest">No Llevó (Retargeting)</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {notTakenSkus.length > 0 ? notTakenSkus.map(sku => (
+                                    <div key={sku} className="group relative">
+                                      <button 
+                                        onClick={() => handleSendSMS(customer.phone as string, selectedStoreIdForDetail as string, 'retargeting', sku as string, `Hola ${customer.name || 'Cliente'}, ¡vimos que te gustó la referencia ${sku}! Llévatela hoy con un 10% de descuento en ${stores.find(s => s.id === selectedStoreIdForDetail)?.name}.`)}
+                                        className="px-3 py-1.5 bg-rose-50 text-rose-600 rounded-lg text-[10px] font-bold border border-rose-100 hover:bg-rose-500 hover:text-white transition-all flex items-center gap-2"
+                                      >
+                                        {sku}
+                                        <MessageSquare className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  )) : <p className="text-xs text-slate-400 italic">Sin registros</p>}
+                                </div>
+                              </div>
+
+                              {/* Prendas Llevadas (Cross-sell) */}
+                              <div className="space-y-3">
+                                <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Llevó (Cross-sell)</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {soldSkus.length > 0 ? soldSkus.map(sku => (
+                                    <div key={sku} className="group relative">
+                                      <button 
+                                        onClick={() => handleSendSMS(customer.phone as string, selectedStoreIdForDetail as string, 'cross_sell', sku as string, `Hola ${customer.name || 'Cliente'}, ¡gracias por tu compra de ${sku}! Te contamos que ya tenemos nuevas referencias y colores disponibles que te encantarán.`)}
+                                        className="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-bold border border-emerald-100 hover:bg-emerald-500 hover:text-white transition-all flex items-center gap-2"
+                                      >
+                                        {sku}
+                                        <MessageSquare className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  )) : <p className="text-xs text-slate-400 italic">Sin registros</p>}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Historial de Campañas Enviadas */}
+                <div className="space-y-6">
+                  <h4 className="text-xl font-black text-slate-900 uppercase tracking-widest">Campañas Enviadas</h4>
+                  <div className="bg-white rounded-[2rem] border border-slate-200 overflow-hidden">
+                    <table className="w-full text-left">
+                      <thead className="bg-slate-50">
+                        <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          <th className="px-8 py-6">Cliente</th>
+                          <th className="px-8 py-6">Tipo</th>
+                          <th className="px-8 py-6">Referencia</th>
+                          <th className="px-8 py-6">Mensaje</th>
+                          <th className="px-8 py-6">Fecha</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {smsCampaigns.filter(camp => camp.storeId === selectedStoreIdForDetail).length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="px-8 py-12 text-center text-slate-400 font-medium italic">No se han enviado campañas aún.</td>
+                          </tr>
+                        ) : (
+                          [...smsCampaigns].filter(camp => camp.storeId === selectedStoreIdForDetail).reverse().map(camp => (
+                            <tr key={camp.id} className="text-xs">
+                              <td className="px-8 py-6 font-bold text-slate-800">
+                                {customers.find(c => c.phone === camp.customerId)?.name || 'Desconocido'}
+                              </td>
+                              <td className="px-8 py-6">
+                                <span className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest ${
+                                  camp.type === 'retargeting' ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'
+                                }`}>
+                                  {camp.type === 'retargeting' ? 'Retargeting' : 'Cross-sell'}
+                                </span>
+                              </td>
+                              <td className="px-8 py-6 font-mono font-bold text-slate-500">{camp.sku}</td>
+                              <td className="px-8 py-6 text-slate-500 max-w-xs truncate">{camp.message}</td>
+                              <td className="px-8 py-6 text-slate-400">{new Date(camp.sentAt).toLocaleDateString()}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1443,17 +2090,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   );
 };
 
-const SidebarItem: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string, theme: any }> = ({ active, onClick, icon, label, theme }) => (
+const SidebarItem: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string, theme: any, badge?: number }> = ({ active, onClick, icon, label, theme, badge }) => (
   <button 
     onClick={onClick} 
-    className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-black transition-all group ${
+    className={`w-full flex items-center justify-between px-6 py-4 rounded-2xl font-black transition-all group ${
       active 
         ? `${theme.primary} text-white shadow-2xl ${theme.shadow} scale-[1.02]`
         : 'text-slate-500 hover:text-white hover:bg-white/5'
     }`}
   >
-    {React.cloneElement(icon as React.ReactElement, { className: `w-5 h-5 transition-transform group-hover:scale-110` })}
-    <span className="text-[11px] uppercase tracking-widest">{label}</span>
+    <div className="flex items-center gap-4">
+      {React.cloneElement(icon as React.ReactElement, { className: `w-5 h-5 transition-transform group-hover:scale-110` })}
+      <span className="text-[11px] uppercase tracking-widest">{label}</span>
+    </div>
+    {badge !== undefined && badge > 0 && (
+      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${active ? 'bg-white text-slate-900' : 'bg-rose-500 text-white'}`}>
+        {badge}
+      </span>
+    )}
   </button>
 );
 
@@ -1466,12 +2120,12 @@ const StatCard: React.FC<{ label: string; value: string; icon: React.ReactNode; 
   const s = styles[theme];
   
   return (
-    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-xl transition-all group">
-      <div className={`w-12 h-12 ${s.icon} text-white rounded-xl flex items-center justify-center mb-6 shadow-lg group-hover:rotate-6 transition-transform`}>
-        {React.cloneElement(icon as React.ReactElement, { className: 'w-6 h-6' })}
+    <div className="bg-white p-6 sm:p-8 rounded-2xl sm:rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-xl transition-all group">
+      <div className={`w-10 h-10 sm:w-12 sm:h-12 ${s.icon} text-white rounded-xl flex items-center justify-center mb-4 sm:mb-6 shadow-lg group-hover:rotate-6 transition-transform`}>
+        {React.cloneElement(icon as React.ReactElement, { className: 'w-5 h-5 sm:w-6 h-6' })}
       </div>
-      <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">{label}</p>
-      <h4 className="text-3xl font-black text-slate-900">{value}</h4>
+      <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">{label}</p>
+      <h4 className="text-2xl sm:text-3xl font-black text-slate-900">{value}</h4>
     </div>
   );
 };

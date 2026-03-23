@@ -1,0 +1,58 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "App users including Super Admins, Store Admins, and Staff",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["SUPER_ADMIN", "STORE_ADMIN", "STAFF"] },
+        "storeId": { "type": "string", "description": "ID of the store the user belongs to" }
+      },
+      "required": ["id", "name", "email", "role"]
+    },
+    "Store": {
+      "title": "Store",
+      "description": "Retail store locations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "brandId": { "type": "string" },
+        "name": { "type": "string" },
+        "location": { "type": "string" },
+        "adminId": { "type": "string" }
+      },
+      "required": ["id", "brandId", "name", "adminId"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Inventory items",
+      "type": "object",
+      "properties": {
+        "sku": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "number" },
+        "stock": { "type": "number" },
+        "storeId": { "type": "string" }
+      },
+      "required": ["sku", "name", "price", "stock", "storeId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/stores/{storeId}": {
+      "schema": "Store",
+      "description": "Store data"
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Product inventory"
+    }
+  }
+}

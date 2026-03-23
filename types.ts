@@ -69,6 +69,7 @@ export interface Store {
   location: string;
   adminId: string;
   config: StoreConfig;
+  code: string;
   billing?: {
     plan: 'basic' | 'pro' | 'enterprise';
     status: BillingStatus;
@@ -82,8 +83,10 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  password: string;
+  password?: string;
   role: Role;
+  storeId?: string;
+  isFirstLogin?: boolean;
 }
 
 export interface Customer {
@@ -95,6 +98,7 @@ export interface Customer {
     fittingRoomId: number;
     itemsEntered: string[];
     itemsSold: string[];
+    itemsLeft: string[];
     timestamp: number;
   }[];
 }
@@ -139,6 +143,29 @@ export interface AdRequest {
   status: 'pending' | 'approved' | 'running' | 'completed' | 'rejected';
   requestedAt: number;
   imageUrl?: string;
+}
+
+export interface InventoryAlert {
+  id: string;
+  sku: string;
+  productName: string;
+  storeId: string;
+  workerId: string;
+  workerName: string;
+  timestamp: number;
+  isRead: boolean;
+  type: 'missing';
+}
+
+export interface SMSCampaign {
+  id: string;
+  customerId: string; // phone number
+  storeId: string;
+  type: 'retargeting' | 'cross_sell';
+  sku: string;
+  message: string;
+  sentAt: number;
+  status: 'sent' | 'failed';
 }
 
 export type TimeRange = 'day' | 'week' | 'month' | 'quarter' | 'year';

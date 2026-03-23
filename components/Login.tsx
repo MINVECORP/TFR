@@ -5,6 +5,7 @@ import {
   LogIn, Mail, Lock, ShieldCheck, Eye, EyeOff, 
   Loader2, Crown, Store, UserCircle, ChevronLeft 
 } from 'lucide-react';
+import { signInWithGoogle } from '../firebase';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -12,10 +13,11 @@ interface LoginProps {
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
-  const [view, setView] = useState<'portals' | 'form'>('portals');
+  const [view, setView] = useState<'portals' | 'form' | 'register'>('portals');
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -35,7 +37,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
       const user = users.find(
         (u) => 
           u.email.toLowerCase().trim() === email.toLowerCase().trim() && 
-          u.password.trim() === password.trim() &&
+          u.password?.trim() === password.trim() &&
           u.role === selectedRole // Validación estricta de rol según portal
       );
 
@@ -48,6 +50,32 @@ const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
         setIsLoading(false);
       }
     }, 800);
+  };
+
+  const handleGoogleLogin = async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const result = await signInWithGoogle();
+      const googleUser = result.user;
+      
+      // Check if user exists in our local list or database
+      const existingUser = users.find(u => u.email.toLowerCase() === googleUser.email?.toLowerCase());
+      
+      if (existingUser) {
+        onLogin(existingUser);
+      } else {
+        // If not found, we could allow them to register
+        setEmail(googleUser.email || '');
+        setName(googleUser.displayName || '');
+        setView('register');
+        setIsLoading(false);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError('Error al iniciar sesión con Google.');
+      setIsLoading(false);
+    }
   };
 
   const getPortalInfo = () => {
@@ -78,7 +106,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
           
           {/* VISTA 1: SELECCIÓN DE PORTALES */}
           {view === 'portals' && (
-            <div className="p-10 md:p-16 animate-in fade-in zoom-in duration-700">
+            <div className="p-6 sm:p-10 md:p-16 animate-in fade-in zoom-in duration-700">
               <div className="text-center mb-16">
                 <div className="w-20 h-20 bg-slate-950 rounded-[2.2rem] flex items-center justify-center shadow-2xl mx-auto mb-8 transform hover:scale-110 transition-transform">
                   <ShieldCheck className="w-10 h-10 text-indigo-400" />
@@ -115,7 +143,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
 
           {/* VISTA 2: FORMULARIO DE CREDENCIALES */}
           {view === 'form' && (
-            <div className="p-10 md:p-16 animate-in slide-in-from-right duration-500">
+            <div className="p-6 sm:p-10 md:p-16 animate-in slide-in-from-right duration-500">
               <button 
                 onClick={() => setView('portals')}
                 className="flex items-center gap-2 text-slate-400 hover:text-slate-900 font-black text-[10px] uppercase tracking-widest mb-12 transition-colors group"
@@ -131,6 +159,25 @@ const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
                 <div>
                   <h2 className="text-2xl font-black text-slate-900">{getPortalInfo().title}</h2>
                   <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Ingresa tus credenciales</p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                disabled={isLoading}
+                className="w-full mb-8 flex items-center justify-center gap-4 py-5 bg-white border-2 border-slate-100 rounded-[1.8rem] hover:border-indigo-500 hover:bg-slate-50 transition-all group disabled:opacity-50"
+              >
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-6 h-6" />
+                <span className="text-sm font-black text-slate-700">Acceso Preferente con Google</span>
+              </button>
+
+              <div className="relative mb-8">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-slate-100"></div>
+                </div>
+                <div className="relative flex justify-center text-[10px] font-black uppercase tracking-widest">
+                  <span className="bg-white px-4 text-slate-300">O usa tu correo corporativo</span>
                 </div>
               </div>
 
@@ -195,8 +242,105 @@ const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
               </form>
             </div>
           )}
+
+          {/* VISTA 3: REGISTRO */}
+          {view === 'register' && (
+            <div className="p-10 md:p-16 animate-in slide-in-from-bottom duration-500">
+              <button 
+                onClick={() => setView('portals')}
+                className="flex items-center gap-2 text-slate-400 hover:text-slate-900 font-black text-[10px] uppercase tracking-widest mb-12 transition-colors group"
+              >
+                <ChevronLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                Volver al Inicio
+              </button>
+
+              <div className="text-center mb-12">
+                <h2 className="text-3xl font-black text-slate-900 tracking-tight">Crea tu Cuenta</h2>
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">Únete a la red de FittingPro</p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                disabled={isLoading}
+                className="w-full mb-8 flex items-center justify-center gap-4 py-5 bg-white border-2 border-slate-100 rounded-[1.8rem] hover:border-indigo-500 hover:bg-slate-50 transition-all group disabled:opacity-50"
+              >
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-6 h-6" />
+                <span className="text-sm font-black text-slate-700">Regístrate con Google</span>
+              </button>
+
+              <div className="relative mb-8">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-slate-100"></div>
+                </div>
+                <div className="relative flex justify-center text-[10px] font-black uppercase tracking-widest">
+                  <span className="bg-white px-4 text-slate-300">O completa tus datos</span>
+                </div>
+              </div>
+
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                setIsLoading(true);
+                // Simulate registration
+                setTimeout(() => {
+                  const newUser: User = {
+                    id: Math.random().toString(36).substr(2, 9),
+                    name,
+                    email,
+                    role: selectedRole || Role.STAFF,
+                    isFirstLogin: true
+                  };
+                  // In a real app, we'd save this to Firestore
+                  onLogin(newUser);
+                }, 1000);
+              }} className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Nombre Completo</label>
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Juan Pérez"
+                    className="w-full px-6 py-5 bg-slate-50 border-2 border-transparent rounded-[1.8rem] text-slate-900 font-bold outline-none focus:bg-white focus:border-indigo-500 transition-all"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Correo Electrónico</label>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="ejemplo@correo.com"
+                    className="w-full px-6 py-5 bg-slate-50 border-2 border-transparent rounded-[1.8rem] text-slate-900 font-bold outline-none focus:bg-white focus:border-indigo-500 transition-all"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full bg-indigo-600 text-white py-6 rounded-[2rem] font-black text-lg shadow-2xl transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-3"
+                >
+                  {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Completar Registro'}
+                </button>
+              </form>
+            </div>
+          )}
         </div>
         
+        <div className="text-center mt-8">
+          {view === 'portals' && (
+            <button 
+              onClick={() => setView('register')}
+              className="text-indigo-400 hover:text-indigo-300 text-[10px] font-black uppercase tracking-widest transition-colors"
+            >
+              ¿No tienes cuenta? Regístrate aquí
+            </button>
+          )}
+        </div>
+
         <p className="text-center mt-10 text-slate-500 text-[10px] font-black uppercase tracking-[0.4em] opacity-40">
           Retail Intelligence v2.5.0
         </p>

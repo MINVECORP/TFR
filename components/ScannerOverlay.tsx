@@ -265,7 +265,7 @@ const ScannerOverlay: React.FC<ScannerOverlayProps> = ({ onClose, onScan, custom
         <div className="absolute bottom-12 left-0 right-0 px-10 flex justify-center z-30">
           <button 
             onClick={onClose}
-            className="w-full max-w-[300px] bg-emerald-500 text-white font-black py-6 rounded-[2.2rem] flex items-center justify-center gap-4 shadow-2xl active:scale-95 transition-all"
+            className="w-full max-w-[300px] bg-emerald-500 text-white font-black py-4 sm:py-6 rounded-[2.2rem] flex items-center justify-center gap-4 shadow-2xl active:scale-95 transition-all"
           >
             <Check className="w-7 h-7 stroke-[3px]" />
             <span className="text-base tracking-[0.15em] font-black uppercase">FINALIZAR</span>
@@ -274,7 +274,7 @@ const ScannerOverlay: React.FC<ScannerOverlayProps> = ({ onClose, onScan, custom
       </div>
 
       {/* Footer para Ingreso Manual */}
-      <div className="p-8 bg-slate-900 border-t border-white/5 z-30">
+      <div className="p-4 sm:p-8 bg-slate-900 border-t border-white/5 z-30">
         <form onSubmit={handleManualSubmit} className="flex gap-4 max-w-lg mx-auto">
           <input 
             type="text" 

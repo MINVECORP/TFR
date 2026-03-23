@@ -121,11 +121,11 @@ const SessionCard: React.FC<SessionCardProps> = ({ session, products, onAddItems
       {/* Close/Checkout Modal */}
       {isClosingModal && (
         <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-slate-950/80 backdrop-blur-md">
-          <div className="bg-white w-full max-w-xl rounded-t-[3rem] sm:rounded-[3rem] p-10 shadow-2xl animate-in slide-in-from-bottom duration-300">
-            <div className="flex justify-between items-start mb-8">
+          <div className="bg-white w-full h-[90vh] sm:h-auto max-w-xl rounded-t-[3rem] sm:rounded-[3rem] p-6 sm:p-10 shadow-2xl animate-in slide-in-from-bottom duration-300 flex flex-col">
+            <div className="flex justify-between items-start mb-6 sm:mb-8">
               <div>
-                <h3 className="text-3xl font-black text-slate-900">Salida de Cliente</h3>
-                <p className="text-slate-500 font-medium mt-1">Marca las prendas que se llevan a caja.</p>
+                <h3 className="text-2xl sm:text-3xl font-black text-slate-900">Salida de Cliente</h3>
+                <p className="text-slate-500 text-sm font-medium mt-1">Marca las prendas que se llevan a caja.</p>
               </div>
               <button 
                 onClick={() => setIsClosingModal(false)}
@@ -135,11 +135,11 @@ const SessionCard: React.FC<SessionCardProps> = ({ session, products, onAddItems
               </button>
             </div>
 
-            <div className="space-y-6 mb-10 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
+            <div className="space-y-4 sm:space-y-6 mb-6 sm:mb-10 flex-1 overflow-y-auto pr-2 custom-scrollbar">
               {sessionItemsWithData.map((item, idx) => (
                 <div 
                   key={idx}
-                  className="p-6 rounded-3xl bg-slate-50 border border-slate-100 space-y-4"
+                  className="p-4 sm:p-6 rounded-3xl bg-slate-50 border border-slate-100 space-y-4"
                 >
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center text-slate-400 shadow-sm">
