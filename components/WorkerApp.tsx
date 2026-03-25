@@ -122,16 +122,24 @@ const WorkerApp: React.FC<WorkerAppProps> = ({
     // Normalizar SKU para evitar espacios
     const cleanSku = sku.trim();
     
-    const productExists = products.some(p => p.sku === cleanSku);
+    const productExists = products.some(p => p.variations?.some(v => v.sku === cleanSku));
     
     // Si el producto no existe (nuevo código de barras no cargado), lo creamos al vuelo
     if (!productExists) {
       const newAutoProduct: Product = {
-        sku: cleanSku,
+        id: `auto-${Date.now()}`,
         name: `Producto ${cleanSku.slice(-6)}`,
         category: 'Ingreso Temporal',
         price: 0,
-        stock: 1
+        imageUrl: 'https://picsum.photos/seed/product/200',
+        isActive: true,
+        variations: [{
+          sku: cleanSku,
+          size: 'N/A',
+          color: 'N/A',
+          stock: 1,
+          isActive: true
+        }]
       };
       setProducts(prev => [...prev, newAutoProduct]);
       setLastNewProduct(cleanSku);

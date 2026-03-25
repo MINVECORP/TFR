@@ -219,6 +219,122 @@ async function startServer() {
     }
   });
 
+  // --- Marketing Automation & Short Links ---
+  
+  // In-memory store for short links (In production, use Firestore/Redis)
+  const shortLinks = new Map<string, { targetUrl: string, metadata: any }>();
+  // In-memory store for recovered sales (In production, use Firestore)
+  const recoveredSales = [] as any[];
+
+  app.post("/api/marketing/generate-link", (req, res) => {
+    const { targetUrl, metadata, sessionId } = req.body;
+    const shortId = Math.random().toString(36).substring(2, 8);
+    
+    // 1. Build Dynamic Personalized Link with UTMs
+    const url = new URL(targetUrl);
+    url.searchParams.set('utm_source', 'percherodigital');
+    url.searchParams.set('utm_medium', 'sms');
+    if (sessionId) url.searchParams.set('utm_id', sessionId);
+    
+    const finalTargetUrl = url.toString();
+    shortLinks.set(shortId, { targetUrl: finalTargetUrl, metadata: { ...metadata, sessionId } });
+    
+    const origin = process.env.APP_URL?.trim() || "http://localhost:3000";
+    res.json({ 
+      shortId, 
+      shortUrl: `${origin}/go/${shortId}`,
+      fullUrl: finalTargetUrl 
+    });
+  });
+
+  app.get("/go/:shortId", (req, res) => {
+    const { shortId } = req.params;
+    const linkData = shortLinks.get(shortId);
+    
+    if (linkData) {
+      const now = new Date();
+      console.log(`[Marketing] CLICK DETECTED!`);
+      console.log(`- Short ID: ${shortId}`);
+      console.log(`- Session ID: ${linkData.metadata.sessionId}`);
+      console.log(`- Time: ${now.toLocaleTimeString()}`);
+      console.log(`- Target: ${linkData.targetUrl}`);
+      
+      // Log the click for analytics
+      res.redirect(linkData.targetUrl);
+    } else {
+      res.status(404).send("Link not found");
+    }
+  });
+
+  // 2. Conversion Pixel Endpoint (The "Cash Register")
+  app.post("/api/marketing/pixel", (req, res) => {
+    const { sessionId, amount, type } = req.body;
+    
+    console.log(`[Pixel] CONVERSION DETECTED!`);
+    console.log(`- Session ID: ${sessionId}`);
+    console.log(`- Amount: $${amount}`);
+    console.log(`- Type: ${type || 'Online'}`);
+    
+    const sale = {
+      id: Math.random().toString(36).substring(2, 10),
+      sessionId,
+      amount,
+      type: type || 'Online',
+      timestamp: new Date()
+    };
+    
+    recoveredSales.push(sale);
+    
+    res.json({ success: true, saleId: sale.id });
+  });
+
+  app.get("/api/marketing/sales", (req, res) => {
+    res.json(recoveredSales);
+  });
+
+  app.post("/api/marketing/trigger-automation", async (req, res) => {
+    const { customerPhone, customerName, productName, storeName, productUrl, scenario, sessionId } = req.body;
+    
+    // 1. Generate unique short link for tracking with UTMs
+    const shortId = Math.random().toString(36).substring(2, 8);
+    const origin = process.env.APP_URL?.trim() || "http://localhost:3000";
+    
+    const url = new URL(productUrl);
+    url.searchParams.set('utm_source', 'percherodigital');
+    url.searchParams.set('utm_medium', 'sms');
+    if (sessionId) url.searchParams.set('utm_id', sessionId);
+    
+    const uniqueShortUrl = `${origin}/go/${shortId}`;
+    
+    shortLinks.set(shortId, { 
+      targetUrl: url.toString(), 
+      metadata: { customerPhone, scenario, storeName, productName, sessionId, timestamp: new Date() } 
+    });
+
+    // 2. Prepare message based on scenario
+    let message = "";
+    const couponCode = `PROBA${Math.floor(Math.random() * 90) + 10}`; // e.g. PROBA15
+
+    if (scenario === 'retargeting') {
+      message = `¡Hola ${customerName}! Te veías genial con el ${productName} en ${storeName}. ✨ ¿Te faltó un empujoncito? Llévatelo hoy con 10% OFF usando el código ${couponCode} aquí: ${uniqueShortUrl}`;
+    } else if (scenario === 'urgency') {
+      message = `${customerName}, quedan pocas unidades de tu ${productName} en tu talla. 😱 No dejes que se agote. Muestra el código ${couponCode} en caja o usa este link: ${uniqueShortUrl}`;
+    } else if (scenario === 'cross_selling') {
+      message = `¡Hola ${customerName}! Esperamos que disfrutes tu compra en ${storeName}. Para completar tu look, usa el código ${couponCode} aquí: ${uniqueShortUrl}`;
+    }
+
+    console.log(`[Automation] Triggering ${scenario} for ${customerPhone}`);
+    console.log(`[Automation] Message: ${message}`);
+
+    res.json({ 
+      success: true, 
+      message, 
+      shortUrl: uniqueShortUrl,
+      trackingId: shortId,
+      couponCode
+    });
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

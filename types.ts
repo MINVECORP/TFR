@@ -24,12 +24,23 @@ export enum ItemExitDestination {
   MISSING = 'MISSING'
 }
 
-export interface Product {
+export interface ProductVariation {
   sku: string;
+  size: string;
+  color: string;
+  stock: number;
+  isActive: boolean;
+}
+
+export interface Product {
+  id: string;
   name: string;
   category: string;
   price: number;
-  stock: number;
+  description?: string;
+  imageUrl?: string;
+  isActive: boolean;
+  variations: ProductVariation[];
 }
 
 export enum BillingStatus {
@@ -55,12 +66,20 @@ export interface Brand {
   id: string;
   name: string;
   ownerId: string;
+  logoUrl?: string;
+  colors?: {
+    primary: string;
+    secondary: string;
+    accent: string;
+  };
   billingConfig: {
     type: 'global' | 'per_store';
     price: number;
     status: BillingStatus;
   };
 }
+
+export type PlanType = 'basic' | 'pro' | 'enterprise' | 'growth';
 
 export interface Store {
   id: string;
@@ -71,11 +90,12 @@ export interface Store {
   config: StoreConfig;
   code: string;
   billing?: {
-    plan: 'basic' | 'pro' | 'enterprise';
+    plan: PlanType;
     status: BillingStatus;
     nextBillingDate: number;
     history: Invoice[];
     price: number;
+    successFeePercentage?: number; // For Growth plan (1-3%)
   };
 }
 
@@ -90,9 +110,10 @@ export interface User {
 }
 
 export interface Customer {
-  phone: string;
+  id: string; // Internal ID for stores to see
+  phone: string; // Hidden from store view
   countryCode: string;
-  name?: string;
+  name?: string; // Hidden from store view
   history: {
     sessionId: string;
     fittingRoomId: number;
@@ -143,6 +164,9 @@ export interface AdRequest {
   status: 'pending' | 'approved' | 'running' | 'completed' | 'rejected';
   requestedAt: number;
   imageUrl?: string;
+  externalLink?: string;
+  type?: 'banner' | 'sms';
+  smsType?: 'not_purchased' | 'cross_sell' | 'promotion';
 }
 
 export interface InventoryAlert {
@@ -157,15 +181,43 @@ export interface InventoryAlert {
   type: 'missing';
 }
 
+export interface SmartCampaign {
+  id: string;
+  storeId: string;
+  event: 'abandonment' | 'purchase' | 'out_of_stock';
+  action: 'discount_coupon' | 'complementary_suggestion' | 'back_in_stock_alert';
+  waitTime: number; // in hours
+  requirement?: string; // e.g., "price > 50"
+  isActive: boolean;
+}
+
 export interface SMSCampaign {
   id: string;
   customerId: string; // phone number
   storeId: string;
-  type: 'retargeting' | 'cross_sell';
+  type: 'retargeting' | 'cross_sell' | 'urgency';
   sku: string;
   message: string;
   sentAt: number;
   status: 'sent' | 'failed';
+  tracking?: {
+    clicks: number;
+    conversions: number;
+    revenue: number;
+    lastClickAt?: number;
+    conversionAt?: number;
+  };
+  shortUrl: string;
+  couponCode?: string;
+}
+
+export interface MarketingMetrics {
+  totalSent: number;
+  totalClicks: number;
+  totalConversions: number;
+  recoveredRevenue: number;
+  costPerAcquisition: number;
+  roi: number;
 }
 
 export type TimeRange = 'day' | 'week' | 'month' | 'quarter' | 'year';

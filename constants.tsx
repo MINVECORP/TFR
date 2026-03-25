@@ -95,9 +95,39 @@ export const initialAdRequests: AdRequest[] = [
 ];
 
 export const initialProducts: Product[] = [
-  { sku: '770123456', name: 'Camisa Lino Blanca', category: 'Tops', price: 45.00, stock: 50 },
-  { sku: '770987654', name: 'Jean Slim Fit Azul', category: 'Pantalones', price: 60.00, stock: 30 },
-  { sku: '770111222', name: 'Vestido Floral Verano', category: 'Vestidos', price: 75.00, stock: 20 },
-  { sku: '770333444', name: 'Chaqueta Cuero Negra', category: 'Abrigos', price: 120.00, stock: 15 },
-  { sku: '770555666', name: 'Camiseta Algodón Gris', category: 'Basicos', price: 25.00, stock: 100 }
+  { 
+    id: 'p1',
+    name: 'Camisa Lino Blanca', 
+    category: 'Tops', 
+    price: 45.00, 
+    isActive: true,
+    variations: [
+      { sku: '770123456-S', size: 'S', color: 'Blanco', stock: 20, isActive: true },
+      { sku: '770123456-M', size: 'M', color: 'Blanco', stock: 15, isActive: true },
+      { sku: '770123456-L', size: 'L', color: 'Blanco', stock: 15, isActive: true }
+    ]
+  },
+  { 
+    id: 'p2',
+    name: 'Jean Slim Fit Azul', 
+    category: 'Pantalones', 
+    price: 60.00, 
+    isActive: true,
+    variations: [
+      { sku: '770987654-30', size: '30', color: 'Azul', stock: 10, isActive: true },
+      { sku: '770987654-32', size: '32', color: 'Azul', stock: 10, isActive: true },
+      { sku: '770987654-34', size: '34', color: 'Azul', stock: 10, isActive: true }
+    ]
+  },
+  { 
+    id: 'p3',
+    name: 'Vestido Floral Verano', 
+    category: 'Vestidos', 
+    price: 75.00, 
+    isActive: true,
+    variations: [
+      { sku: '770111222-S', size: 'S', color: 'Floral', stock: 10, isActive: true },
+      { sku: '770111222-M', size: 'M', color: 'Floral', stock: 10, isActive: true }
+    ]
+  }
 ];

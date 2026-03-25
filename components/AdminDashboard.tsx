@@ -1,6 +1,8 @@
 
 import React, { useState, useMemo } from 'react';
-import { User, Product, InventoryLog, FittingSession, TimeRange, Role, Customer, StoreConfig, Store, BillingStatus, Invoice, Brand, AdRequest, InventoryAlert, SessionStatus, ItemExitDestination, SMSCampaign, ItemStatus } from '../types';
+import { User, Product, InventoryLog, FittingSession, TimeRange, Role, Customer, StoreConfig, Store, BillingStatus, Invoice, Brand, AdRequest, InventoryAlert, SessionStatus, ItemExitDestination, SMSCampaign, ItemStatus, SmartCampaign, MarketingMetrics } from '../types';
+import { MarketingNotificationPreview } from './MarketingNotificationPreview';
+import { TriggerWorkflow } from './TriggerWorkflow';
 import { 
   BarChart3, 
   TrendingUp, 
@@ -28,11 +30,15 @@ import {
   Plus,
   Home,
   Smartphone,
+  Trash2,
+  DollarSign,
+  ShoppingCart,
+  X,
+  MessageSquare,
   CreditCard,
   FileText,
   AlertCircle,
   CheckCircle2,
-  X,
   Megaphone,
   Download,
   PieChart as PieChartIcon,
@@ -41,8 +47,7 @@ import {
   Check,
   AlertTriangle,
   ArrowRightLeft,
-  ArrowLeft,
-  MessageSquare
+  ArrowLeft
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, LineChart, Line } from 'recharts';
 
@@ -85,6 +90,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [timeRange, setTimeRange] = useState<TimeRange>('day');
   const [showCreateStore, setShowCreateStore] = useState(false);
   const [showCreateBrand, setShowCreateBrand] = useState(false);
+  const [showCreateSmartCampaign, setShowCreateSmartCampaign] = useState(false);
   const [showAdRequestModal, setShowAdRequestModal] = useState(false);
   const [editingStoreBilling, setEditingStoreBilling] = useState<Store | null>(null);
   const [newStore, setNewStore] = useState({ name: '', location: '', adminEmail: '', plan: 'pro' as const, brandId: '' });
@@ -92,11 +98,113 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [newAdRequest, setNewAdRequest] = useState({ title: '', description: '', storeId: '', imageUrl: '' });
   const [showUploadSuccess, setShowUploadSuccess] = useState(false);
   const [showStoreSuccess, setShowStoreSuccess] = useState(false);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [newProduct, setNewProduct] = useState<Partial<Product>>({
+    name: '',
+    category: '',
+    price: 0,
+    isActive: true,
+    variations: []
+  });
   const [smsStatus, setSmsStatus] = useState<{ success: boolean; message: string } | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [selectedStoreIdForDetail, setSelectedStoreIdForDetail] = useState<string | null>(null);
 
   const currentStore = stores.find(s => s.adminId === user.id) || stores[0];
+
+  const [smartCampaigns, setSmartCampaigns] = useState<SmartCampaign[]>([
+    {
+      id: '1',
+      storeId: currentStore?.id || '1',
+      event: 'abandonment',
+      action: 'discount_coupon',
+      waitTime: 2,
+      isActive: true,
+      requirement: 'price > 50'
+    },
+    {
+      id: '2',
+      storeId: currentStore?.id || '1',
+      event: 'abandonment',
+      action: 'discount_coupon',
+      waitTime: 48,
+      isActive: true,
+      requirement: 'price > 100'
+    },
+    {
+      id: '3',
+      storeId: currentStore?.id || '1',
+      event: 'purchase',
+      action: 'complementary_suggestion',
+      waitTime: 24,
+      isActive: true
+    }
+  ]);
+
+  const marketingMetrics: MarketingMetrics = useMemo(() => ({
+    totalSent: 1240,
+    totalClicks: 308,
+    totalConversions: 45,
+    recoveredRevenue: 4520,
+    costPerAcquisition: 2.5,
+    roi: 15.2
+  }), []);
+
+  const [newSmartCampaign, setNewSmartCampaign] = useState<Partial<SmartCampaign>>({
+    event: 'abandonment',
+    action: 'discount_coupon',
+    waitTime: 2,
+    isActive: true
+  });
+
+  const [selectedScenario, setSelectedScenario] = useState<'retargeting' | 'urgency' | 'cross_selling'>('retargeting');
+  const [recoveredSales, setRecoveredSales] = useState<any[]>([]);
+
+  const scenarios = {
+    retargeting: {
+      title: "¡Vuelve por lo que amas! ✨",
+      message: `Te veías genial con el Vestido Floral en ${currentStore?.name || 'Perchero Digital'}. ¿Te faltó un empujoncito? Llévatelo hoy con 10% OFF usando el código PROBA15 aquí: pd.go/xyz123`,
+      buttonText: "Comprar Ahora",
+      image: "https://images.unsplash.com/photo-1539109132384-361555754525?auto=format&fit=crop&w=300&q=80",
+      coupon: "PROBA15"
+    },
+    urgency: {
+      title: "¡Últimas unidades! 😱",
+      message: `Quedan pocas unidades de tu Vestido Floral en tu talla. No dejes que se agote. Muestra el código PROBA22 en caja o usa este link: pd.go/xyz123`,
+      buttonText: "Ver Stock",
+      image: "https://images.unsplash.com/photo-1539109132384-361555754525?auto=format&fit=crop&w=300&q=80",
+      coupon: "PROBA22"
+    },
+    cross_selling: {
+      title: "Completa el Look 👗",
+      message: `Esperamos que disfrutes tu compra. Para completar tu look, usa el código PROBA88 aquí: pd.go/abc456`,
+      buttonText: "Ver Accesorios",
+      image: "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=300&q=80",
+      coupon: "PROBA88"
+    }
+  };
+
+  const simulateConversion = async (type: 'Online' | 'Física') => {
+    try {
+      const response = await fetch('/api/marketing/pixel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: `SESS_${Math.floor(Math.random() * 10000)}`,
+          amount: Math.floor(Math.random() * 200) + 50,
+          type
+        })
+      });
+      if (response.ok) {
+        const salesRes = await fetch('/api/marketing/sales');
+        const salesData = await salesRes.json();
+        setRecoveredSales(salesData);
+      }
+    } catch (error) {
+      console.error("Error simulating conversion:", error);
+    }
+  };
 
   const storeAlerts = useMemo(() => 
     inventoryAlerts.filter(a => a.storeId === currentStore?.id),
@@ -287,11 +395,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       description: newAdRequest.description,
       status: isSuperAdmin ? 'running' : 'pending',
       requestedAt: Date.now(),
-      imageUrl: newAdRequest.imageUrl || `https://picsum.photos/seed/${Math.random()}/800/200`
+      imageUrl: newAdRequest.imageUrl || `https://picsum.photos/seed/${Math.random()}/800/200`,
+      externalLink: (newAdRequest as any).externalLink,
+      type: (newAdRequest as any).type as 'banner' | 'sms',
+      smsType: (newAdRequest as any).smsType as 'not_purchased' | 'cross_sell' | 'promotion'
     };
     setAdRequests([...adRequests, ad]);
     setShowAdRequestModal(false);
-    setNewAdRequest({ title: '', description: '', storeId: '', imageUrl: '' });
+    setNewAdRequest({ title: '', description: '', storeId: '', imageUrl: '', ...({ externalLink: '', type: 'banner', smsType: 'promotion' } as any) });
   };
 
   const handleUpdateBilling = (storeId: string, updates: Partial<Store['billing']>) => {
@@ -341,15 +452,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         const ws = wb.Sheets[wsname];
         const data = XLSX.utils.sheet_to_json(ws);
         
-        const newProducts: Product[] = data.map((row: any) => ({
-          id: Math.random().toString(36).substr(2, 9),
-          name: String(row.Nombre || row.name || row.Name || 'Producto Sin Nombre'),
-          sku: String(row.SKU || row.sku || Math.random().toString(36).substr(2, 6).toUpperCase()),
-          stock: Number(row.Stock || row.stock || row.Cantidad || 0),
-          price: Number(row.Precio || row.price || row.Price || 0),
-          category: String(row.Categoria || row.category || row.Category || 'General'),
-          image: String(row.Imagen || row.image || row.Image || 'https://picsum.photos/seed/product/200')
-        }));
+        const newProducts: Product[] = data.map((row: any) => {
+          const sku = String(row.SKU || row.sku || Math.random().toString(36).substr(2, 6).toUpperCase());
+          return {
+            id: Math.random().toString(36).substr(2, 9),
+            name: String(row.Nombre || row.name || row.Name || 'Producto Sin Nombre'),
+            category: String(row.Categoria || row.category || row.Category || 'General'),
+            price: Number(row.Precio || row.price || row.Price || 0),
+            imageUrl: String(row.Imagen || row.image || row.Image || 'https://picsum.photos/seed/product/200'),
+            isActive: true,
+            variations: [{
+              sku,
+              size: String(row.Talla || row.size || 'N/A'),
+              color: String(row.Color || row.color || 'N/A'),
+              stock: Number(row.Stock || row.stock || row.Cantidad || 0),
+              isActive: true
+            }]
+          };
+        });
 
         setProducts(prev => [...prev, ...newProducts]);
         setShowUploadSuccess(true);
@@ -359,6 +479,37 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       }
     };
     reader.readAsBinaryString(file);
+  };
+
+  const handleSaveProduct = () => {
+    if (editingProduct) {
+      setProducts(prev => prev.map(p => p.id === editingProduct.id ? editingProduct : p));
+    } else {
+      const product: Product = {
+        ...newProduct as Product,
+        id: `p-${Date.now()}`
+      };
+      setProducts(prev => [...prev, product]);
+    }
+    setShowProductModal(false);
+    setEditingProduct(null);
+    setNewProduct({ name: '', category: '', price: 0, isActive: true, variations: [] });
+  };
+
+  const toggleProductStatus = (productId: string) => {
+    setProducts(prev => prev.map(p => p.id === productId ? { ...p, isActive: !p.isActive } : p));
+  };
+
+  const toggleVariationStatus = (productId: string, sku: string) => {
+    setProducts(prev => prev.map(p => {
+      if (p.id === productId) {
+        return {
+          ...p,
+          variations: p.variations.map(v => v.sku === sku ? { ...v, isActive: !v.isActive } : v)
+        };
+      }
+      return p;
+    }));
   };
 
   const handleSendSMS = async (customerId: string, storeId: string, type: 'retargeting' | 'cross_sell', sku: string, message: string) => {
@@ -392,7 +543,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           sku,
           message,
           sentAt: Date.now(),
-          status: 'sent'
+          status: 'sent',
+          shortUrl: `pd.go/${Math.random().toString(36).substring(7)}`
         };
         setSmsCampaigns(prev => [...prev, newCampaign]);
         setSmsStatus({ success: true, message: '¡SMS enviado con éxito!' });
@@ -724,6 +876,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                <>
                  <SidebarItem active={activeTab === 'overview'} onClick={() => { setActiveTab('overview'); setIsSidebarOpen(false); }} icon={<BarChart3 />} label="Mi Tienda" theme={theme} />
                  <SidebarItem active={activeTab === 'inventory'} onClick={() => { setActiveTab('inventory'); setIsSidebarOpen(false); }} icon={<Package />} label="Control Stock" theme={theme} />
+                 <SidebarItem active={activeTab === 'marketing'} onClick={() => { setActiveTab('marketing'); setIsSidebarOpen(false); }} icon={<TrendingUp />} label="Marketing Directo" theme={theme} />
                  <SidebarItem active={activeTab === 'ads'} onClick={() => { setActiveTab('ads'); setIsSidebarOpen(false); }} icon={<Megaphone />} label="Publicidad" theme={theme} />
                  <SidebarItem active={activeTab === 'customers'} onClick={() => { setActiveTab('customers'); setIsSidebarOpen(false); }} icon={<Users />} label="Clientes" theme={theme} />
                   <SidebarItem active={activeTab === 'staff'} onClick={() => { setActiveTab('staff'); setIsSidebarOpen(false); }} icon={<Users />} label="Mi Equipo" theme={theme} />
@@ -1065,7 +1218,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <div className="mt-8 pt-6 border-t border-slate-100 flex justify-between items-center">
                        <div>
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Plan</p>
-                          <p className="text-sm font-bold text-slate-700 uppercase">{s.billing?.plan || 'Trial'}</p>
+                          <p className="text-sm font-bold text-slate-700 uppercase">
+                            {s.billing?.plan === 'growth' ? `Growth (${s.billing.successFeePercentage}%)` : (s.billing?.plan || 'Trial')}
+                          </p>
                        </div>
                        <div className="flex gap-2">
                          <button 
@@ -1333,6 +1488,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <Upload className="w-4 h-4" />
                       Cargar Excel
                     </label>
+                    <button 
+                      onClick={() => { setEditingProduct(null); setShowProductModal(true); }}
+                      className="bg-amber-500 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-amber-200 hover:bg-amber-600 transition-all flex items-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Nuevo Producto
+                    </button>
                     <button className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all">Exportar Stock</button>
                   </div>
                 </div>
@@ -1354,18 +1516,61 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {products.map((p, i) => (
-                        <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="px-6 sm:px-10 py-4 sm:py-5 font-black text-slate-800 text-sm sm:text-base">{p.name}</td>
-                          <td className="px-6 sm:px-10 py-4 sm:py-5 font-mono text-[10px] sm:text-xs text-slate-400">{p.sku}</td>
-                          <td className="px-6 sm:px-10 py-4 sm:py-5 text-center">
-                            <span className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-black ${p.stock < 10 ? 'bg-rose-50 text-rose-500' : 'bg-emerald-50 text-emerald-500'}`}>
-                              {p.stock} Uds
-                            </span>
-                          </td>
-                          <td className="px-6 sm:px-10 py-4 sm:py-5 text-right">
-                             <button className="p-2 text-slate-300 hover:text-indigo-600"><Settings className="w-4 h-4" /></button>
-                          </td>
-                        </tr>
+                        <React.Fragment key={p.id}>
+                          <tr className={`hover:bg-slate-50/50 transition-colors ${!p.isActive ? 'opacity-50' : ''}`}>
+                            <td className="px-6 sm:px-10 py-4 sm:py-5">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-2 h-2 rounded-full ${p.isActive ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
+                                <span className="font-black text-slate-800 text-sm sm:text-base">{p.name}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 sm:px-10 py-4 sm:py-5 font-mono text-[10px] sm:text-xs text-slate-400">Padre</td>
+                            <td className="px-6 sm:px-10 py-4 sm:py-5 text-center">
+                              <span className="px-3 sm:px-4 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-black bg-slate-100 text-slate-500">
+                                {p.variations.reduce((acc, v) => acc + v.stock, 0)} Uds
+                              </span>
+                            </td>
+                            <td className="px-6 sm:px-10 py-4 sm:py-5 text-right flex items-center justify-end gap-2">
+                               <button 
+                                 onClick={() => toggleProductStatus(p.id)}
+                                 className={`p-2 rounded-lg transition-colors ${p.isActive ? 'text-emerald-500 hover:bg-emerald-50' : 'text-slate-300 hover:bg-slate-100'}`}
+                                 title={p.isActive ? 'Desactivar Producto' : 'Activar Producto'}
+                               >
+                                 <Activity className="w-4 h-4" />
+                               </button>
+                               <button 
+                                 onClick={() => { setEditingProduct(p); setShowProductModal(true); }}
+                                 className="p-2 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                               >
+                                 <Settings className="w-4 h-4" />
+                               </button>
+                            </td>
+                          </tr>
+                          {p.variations.map(v => (
+                            <tr key={v.sku} className={`bg-slate-50/30 ${!v.isActive || !p.isActive ? 'opacity-50' : ''}`}>
+                              <td className="px-12 sm:px-16 py-3 sm:py-4">
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-1.5 h-1.5 rounded-full ${v.isActive && p.isActive ? 'bg-indigo-400' : 'bg-slate-300'}`}></div>
+                                  <span className="text-xs font-bold text-slate-600">{v.size} / {v.color}</span>
+                                </div>
+                              </td>
+                              <td className="px-6 sm:px-10 py-3 sm:py-4 font-mono text-[10px] text-slate-400">{v.sku}</td>
+                              <td className="px-6 sm:px-10 py-3 sm:py-4 text-center">
+                                <span className={`px-2 py-1 rounded-lg text-[9px] font-black ${v.stock < 5 ? 'bg-rose-50 text-rose-500' : 'bg-indigo-50 text-indigo-500'}`}>
+                                  {v.stock} Uds
+                                </span>
+                              </td>
+                              <td className="px-6 sm:px-10 py-3 sm:py-4 text-right">
+                                <button 
+                                  onClick={() => toggleVariationStatus(p.id, v.sku)}
+                                  className={`p-1.5 rounded-md transition-colors ${v.isActive ? 'text-indigo-500 hover:bg-indigo-50' : 'text-slate-300 hover:bg-slate-100'}`}
+                                >
+                                  <Activity className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </React.Fragment>
                       ))}
                     </tbody>
                   </table>
@@ -1510,13 +1715,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           const totalSold = c.history.reduce((acc, h) => acc + h.itemsSold.length, 0);
                           const conversion = totalEntered > 0 ? ((totalSold / totalEntered) * 100).toFixed(1) : '0';
                           return (
-                            <tr key={i} className="hover:bg-slate-50/50 transition-colors group">
+                            <tr key={c.id || i} className="hover:bg-slate-50/50 transition-colors group">
                               <td className="px-6 sm:px-10 py-4 sm:py-6">
                                 <div className="flex items-center gap-3 sm:gap-4">
                                   <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
                                     <UserIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                                   </div>
-                                  <span className="font-black text-slate-800 text-sm sm:text-base">{c.name || 'Sin Nombre'}</span>
+                                  <div className="flex flex-col">
+                                    <span className="font-black text-slate-800 text-sm sm:text-base">
+                                      {c.name ? `${c.name[0]}${'*'.repeat(c.name.length - 1)}` : 'Sin Nombre'}
+                                    </span>
+                                    <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest">ID: {c.id || 'N/A'}</span>
+                                  </div>
                                 </div>
                               </td>
                               <td className="px-6 sm:px-10 py-4 sm:py-6">
@@ -1524,7 +1734,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-300">
                                     <Smartphone className="w-3.5 h-3.5 sm:w-4 h-4" />
                                   </div>
-                                  <span className="font-bold text-slate-600 text-sm sm:text-base">{c.phone}</span>
+                                  <span className="font-bold text-slate-600 text-sm sm:text-base">
+                                    {c.phone ? `${c.phone.slice(0, 3)}****${c.phone.slice(-2)}` : 'N/A'}
+                                  </span>
                                 </div>
                               </td>
                               <td className="px-6 sm:px-10 py-4 sm:py-6 text-center font-bold text-slate-600 text-sm sm:text-base">{c.history.length}</td>
@@ -1571,6 +1783,51 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       onChange={(e) => setStoreConfig({ ...storeConfig, fittingRoomsCount: parseInt(e.target.value) || 1 })}
                     />
                     <p className="text-sm text-slate-400 font-medium">Define cuántos probadores físicos tiene la tienda para asignar a los clientes.</p>
+                  </div>
+                </div>
+
+                <div className="pt-6 border-t border-slate-100">
+                  <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-6">Identidad de Marca</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">Logo de la Marca (URL)</label>
+                      <input 
+                        type="text" 
+                        className="w-full px-6 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-2xl font-bold outline-none transition-all"
+                        placeholder="https://ejemplo.com/logo.png"
+                        value={brands.find(b => b.id === currentStore?.brandId)?.logoUrl || ''}
+                        onChange={(e) => {
+                          if (currentStore?.brandId) {
+                            setBrands(prev => prev.map(b => b.id === currentStore.brandId ? { ...b, logoUrl: e.target.value } : b));
+                          }
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">Color Principal</label>
+                      <div className="flex items-center gap-4">
+                        <input 
+                          type="color" 
+                          className="w-16 h-14 bg-slate-50 border-2 border-transparent rounded-2xl cursor-pointer p-1"
+                          value={brands.find(b => b.id === currentStore?.brandId)?.colors?.primary || '#4f46e5'}
+                          onChange={(e) => {
+                            if (currentStore?.brandId) {
+                              setBrands(prev => prev.map(b => b.id === currentStore.brandId ? { ...b, colors: { ...b.colors, primary: e.target.value } } : b));
+                            }
+                          }}
+                        />
+                        <input 
+                          type="text" 
+                          className="flex-1 px-6 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-2xl font-bold outline-none transition-all"
+                          value={brands.find(b => b.id === currentStore?.brandId)?.colors?.primary || '#4f46e5'}
+                          onChange={(e) => {
+                            if (currentStore?.brandId) {
+                              setBrands(prev => prev.map(b => b.id === currentStore.brandId ? { ...b, colors: { ...b.colors, primary: e.target.value } } : b));
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
                 
@@ -1620,11 +1877,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
 
               {/* Selección de Planes */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 {[
                   { id: 'basic', name: 'Básico', price: 29, features: ['Hasta 3 Probadores', 'Reportes Básicos', 'Soporte Email'] },
                   { id: 'pro', name: 'Profesional', price: 49, features: ['Hasta 10 Probadores', 'Reportes Avanzados', 'Soporte 24/7'] },
-                  { id: 'enterprise', name: 'Enterprise', price: 99, features: ['Probadores Ilimitados', 'API Access', 'Account Manager'] }
+                  { id: 'enterprise', name: 'Enterprise', price: 99, features: ['Probadores Ilimitados', 'API Access', 'Account Manager'] },
+                  { id: 'growth', name: 'Growth', price: 19, features: ['Marketing Directo', 'Success Fee (2%)', 'Automatización IA'] }
                 ].map((plan) => (
                   <div 
                     key={plan.id}
@@ -1722,6 +1980,222 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           )}
 
+          {!isSuperAdmin && activeTab === 'marketing' && (
+            <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="flex justify-between items-end">
+                <div>
+                  <h3 className="text-3xl font-black text-slate-900 tracking-tight">Marketing Directo</h3>
+                  <p className="text-sm text-slate-400 font-bold uppercase tracking-widest mt-2">Motor de Monetización y Re-engagement</p>
+                </div>
+                <div className="flex gap-4">
+                   <div className="bg-indigo-600/10 px-6 py-3 rounded-2xl border border-indigo-500/20">
+                      <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Plan Actual</p>
+                      <p className="text-sm font-black text-indigo-900">{currentStore?.billing?.plan === 'growth' ? 'GROWTH (Variable)' : 'SaaS Fijo'}</p>
+                   </div>
+                </div>
+              </div>
+
+              {/* Marketing Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <StatCard label="SMS Enviados" value={marketingMetrics.totalSent.toLocaleString()} icon={<Smartphone />} theme="indigo" />
+                <StatCard label="CTR (Clics)" value={`${((marketingMetrics.totalClicks / marketingMetrics.totalSent) * 100).toFixed(1)}%`} icon={<TrendingUp />} theme="emerald" />
+                <StatCard label="Ventas Recuperadas" value={`$${marketingMetrics.recoveredRevenue.toLocaleString()}`} icon={<DollarSign />} theme="amber" />
+                <StatCard label="ROI Estimado" value={`${marketingMetrics.roi}x`} icon={<Activity />} theme="indigo" />
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+                {/* Trigger Workflow Visualization */}
+                <div className="lg:col-span-2">
+                  <TriggerWorkflow />
+                </div>
+
+                {/* Copywriting Preview */}
+                <div className="space-y-6">
+                  <div className="bg-slate-900 rounded-[3rem] p-10 text-white shadow-2xl relative overflow-hidden flex flex-col items-center justify-center min-h-[500px]">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full -mr-32 -mt-32 blur-3xl"></div>
+                    <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-500/5 rounded-full -ml-32 -mb-32 blur-3xl"></div>
+                    
+                    <div className="flex gap-2 mb-8 bg-white/5 p-1 rounded-2xl border border-white/10">
+                      <button 
+                        onClick={() => setSelectedScenario('retargeting')}
+                        className={`px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${selectedScenario === 'retargeting' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                      >
+                        Retargeting
+                      </button>
+                      <button 
+                        onClick={() => setSelectedScenario('urgency')}
+                        className={`px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${selectedScenario === 'urgency' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                      >
+                        Urgencia
+                      </button>
+                      <button 
+                        onClick={() => setSelectedScenario('cross_selling')}
+                        className={`px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${selectedScenario === 'cross_selling' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                      >
+                        Cross-sell
+                      </button>
+                    </div>
+                    
+                    <h4 className="text-xs font-black uppercase tracking-[0.3em] mb-10 text-indigo-400 text-center">UX de Marketing: Notificación</h4>
+                    
+                    <MarketingNotificationPreview 
+                      storeName={currentStore?.name || 'Perchero Digital'} 
+                      title={scenarios[selectedScenario].title}
+                      message={scenarios[selectedScenario].message}
+                      buttonText={scenarios[selectedScenario].buttonText}
+                      productImage={scenarios[selectedScenario].image}
+                    />
+                    
+                    <div className="mt-10 pt-8 border-t border-white/10 w-full flex justify-between items-center">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Tasa de Apertura</span>
+                        <span className="text-xl font-black text-emerald-400">98.2%</span>
+                      </div>
+                      <Sparkles className="w-6 h-6 text-amber-400 animate-pulse" />
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-[2.5rem] p-8 border border-slate-200 shadow-lg">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Métrica de Éxito</h4>
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-end">
+                        <p className="text-2xl font-black text-slate-900">25%</p>
+                        <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">CTR Promedio</p>
+                      </div>
+                      <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-indigo-600 rounded-full" style={{ width: '25%' }}></div>
+                      </div>
+                      <p className="text-[10px] text-slate-400 leading-relaxed font-medium">
+                        Tus clientes están regresando a la tienda online o física gracias a los recordatorios automáticos.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 rounded-[2.5rem] p-8 border border-slate-200">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 text-center">Simulador de Conversión</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <button 
+                        onClick={() => simulateConversion('Online')}
+                        className="bg-white border border-slate-200 p-4 rounded-2xl hover:border-indigo-500 transition-all group"
+                      >
+                        <ShoppingCart className="w-5 h-5 text-indigo-600 mb-2 mx-auto group-hover:scale-110 transition-transform" />
+                        <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Venta Online</p>
+                        <p className="text-[8px] text-slate-400 uppercase tracking-widest mt-1">(Píxel Script)</p>
+                      </button>
+                      <button 
+                        onClick={() => simulateConversion('Física')}
+                        className="bg-white border border-slate-200 p-4 rounded-2xl hover:border-emerald-500 transition-all group"
+                      >
+                        <StoreIcon className="w-5 h-5 text-emerald-600 mb-2 mx-auto group-hover:scale-110 transition-transform" />
+                        <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Venta Física</p>
+                        <p className="text-[8px] text-slate-400 uppercase tracking-widest mt-1">(Cupón QR)</p>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recovered Sales Table */}
+              {recoveredSales.length > 0 && (
+                <div className="mt-10">
+                  <div className="bg-white rounded-[3rem] border border-slate-200 shadow-xl overflow-hidden">
+                    <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-emerald-50/30">
+                      <div>
+                        <h4 className="text-lg font-black text-slate-900 uppercase tracking-widest">Ventas Recuperadas (Atribución)</h4>
+                        <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mt-1">Ventas detectadas vía Píxel y Cupones</p>
+                      </div>
+                      <div className="bg-emerald-500 text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest">
+                        Total: ${recoveredSales.reduce((acc, s) => acc + s.amount, 0).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="p-0">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-100">
+                            <th className="px-8 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">ID Sesión</th>
+                            <th className="px-8 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Monto</th>
+                            <th className="px-8 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Canal</th>
+                            <th className="px-8 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Fecha</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {recoveredSales.map((sale) => (
+                            <tr key={sale.id} className="hover:bg-emerald-50/30 transition-colors">
+                              <td className="px-8 py-6 font-mono text-[10px] text-slate-600">{sale.sessionId}</td>
+                              <td className="px-8 py-6 font-black text-slate-900">${sale.amount}</td>
+                              <td className="px-8 py-6">
+                                <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${sale.type === 'Online' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                  {sale.type}
+                                </span>
+                              </td>
+                              <td className="px-8 py-6 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                                {new Date(sale.timestamp).toLocaleString()}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Smart Campaigns Config */}
+              <div className="mt-10">
+                <div className="bg-white rounded-[3rem] border border-slate-200 shadow-xl overflow-hidden">
+                  <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                    <h4 className="text-lg font-black text-slate-900 uppercase tracking-widest">Campañas Inteligentes (SmartCampaigns)</h4>
+                    <button 
+                      onClick={() => setShowCreateSmartCampaign(true)}
+                      className="bg-slate-900 text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all"
+                    >
+                      Nueva Regla
+                    </button>
+                  </div>
+                  <div className="p-0">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-100">
+                          <th className="px-8 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Evento</th>
+                          <th className="px-8 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Acción</th>
+                          <th className="px-8 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Espera</th>
+                          <th className="px-8 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {smartCampaigns.map((camp) => (
+                          <tr key={camp.id} className="hover:bg-slate-50 transition-colors group">
+                            <td className="px-8 py-6 font-bold text-slate-800">
+                              {camp.event === 'abandonment' ? 'Abandono de Prenda' : 
+                               camp.event === 'purchase' ? 'Compra Exitosa' : 
+                               camp.event === 'out_of_stock' ? 'Sin Stock' : camp.event}
+                            </td>
+                            <td className="px-8 py-6">
+                              <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black uppercase tracking-widest">
+                                {camp.action === 'discount_coupon' ? 'Cupón Descuento' : 
+                                 camp.action === 'complementary_suggestion' ? 'Sugerencia' : 'Aviso Stock'}
+                              </span>
+                            </td>
+                            <td className="px-8 py-6 text-slate-500 font-medium">
+                              {camp.waitTime} Horas
+                            </td>
+                            <td className="px-8 py-6">
+                              <button 
+                                onClick={() => setSmartCampaigns(prev => prev.map(c => c.id === camp.id ? { ...c, isActive: !c.isActive } : c))}
+                                className={`w-12 h-6 rounded-full transition-all relative ${camp.isActive ? 'bg-emerald-500' : 'bg-slate-200'}`}
+                              >
+                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${camp.isActive ? 'right-1' : 'left-1'}`}></div>
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           {!isSuperAdmin && activeTab === 'audit' && (
             <div className="bg-white rounded-[3rem] border border-slate-200 p-10 shadow-xl">
               <h3 className="text-2xl font-black text-slate-900 mb-4">Arqueo Diario</h3>
@@ -1866,6 +2340,82 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         )}
 
         {/* MODAL SOLICITAR PUBLICIDAD */}
+        {/* Smart Campaign Creation Modal */}
+        {showCreateSmartCampaign && (
+          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+            <div className="bg-white rounded-[3rem] w-full max-w-xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
+              <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 uppercase tracking-widest">Nueva Regla Inteligente</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Automatización de Marketing</p>
+                </div>
+                <button onClick={() => setShowCreateSmartCampaign(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                  <X className="w-6 h-6 text-slate-400" />
+                </button>
+              </div>
+              <div className="p-8 space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nombre de la Campaña</label>
+                  <input 
+                    type="text"
+                    value={newSmartCampaign.name}
+                    onChange={(e) => setNewSmartCampaign({ ...newSmartCampaign, name: e.target.value })}
+                    className="w-full bg-slate-50 border-none rounded-2xl p-4 text-slate-900 font-bold focus:ring-2 focus:ring-indigo-500 transition-all"
+                    placeholder="Ej: Recuperación de Carrito"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Evento Disparador</label>
+                    <select 
+                      value={newSmartCampaign.event}
+                      onChange={(e) => setNewSmartCampaign({ ...newSmartCampaign, event: e.target.value as any })}
+                      className="w-full bg-slate-50 border-none rounded-2xl p-4 text-slate-900 font-bold focus:ring-2 focus:ring-indigo-500 transition-all"
+                    >
+                      <option value="abandonment">Abandono de Prenda</option>
+                      <option value="purchase">Compra Exitosa</option>
+                      <option value="out_of_stock">Sin Stock</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Acción</label>
+                    <select 
+                      value={newSmartCampaign.action}
+                      onChange={(e) => setNewSmartCampaign({ ...newSmartCampaign, action: e.target.value as any })}
+                      className="w-full bg-slate-50 border-none rounded-2xl p-4 text-slate-900 font-bold focus:ring-2 focus:ring-indigo-500 transition-all"
+                    >
+                      <option value="discount_coupon">Cupón Descuento</option>
+                      <option value="complementary_suggestion">Sugerencia Complementaria</option>
+                      <option value="back_in_stock_alert">Aviso de Stock</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tiempo de Espera (Horas)</label>
+                  <input 
+                    type="number"
+                    value={newSmartCampaign.waitTime}
+                    onChange={(e) => setNewSmartCampaign({ ...newSmartCampaign, waitTime: parseInt(e.target.value) })}
+                    className="w-full bg-slate-50 border-none rounded-2xl p-4 text-slate-900 font-bold focus:ring-2 focus:ring-indigo-500 transition-all"
+                    placeholder="Ej: 2"
+                  />
+                </div>
+                <button 
+                  onClick={() => {
+                    if (newSmartCampaign.event) {
+                      setSmartCampaigns([...smartCampaigns, { ...newSmartCampaign as SmartCampaign, id: Date.now().toString(), storeId: currentStore?.id || '1' }]);
+                      setShowCreateSmartCampaign(false);
+                      setNewSmartCampaign({ event: 'abandonment', action: 'discount_coupon', waitTime: 2, isActive: true });
+                    }
+                  }}
+                  className="w-full bg-indigo-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all"
+                >
+                  Crear Regla Automática
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {showAdRequestModal && (
           <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 bg-slate-950/60 backdrop-blur-sm">
             <div className="bg-white w-full max-w-lg rounded-t-[3rem] sm:rounded-[3rem] p-8 sm:p-10 shadow-2xl animate-in slide-in-from-bottom sm:zoom-in duration-300">
@@ -1873,6 +2423,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 {isSuperAdmin ? 'Publicar Pauta Publicitaria' : 'Solicitar Campaña Publicitaria'}
               </h3>
               <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4 p-1 bg-slate-100 rounded-2xl">
+                  <button 
+                    onClick={() => setNewAdRequest({...newAdRequest, type: 'banner'} as any)}
+                    className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${(newAdRequest as any).type === 'banner' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    Banner App
+                  </button>
+                  <button 
+                    onClick={() => setNewAdRequest({...newAdRequest, type: 'sms'} as any)}
+                    className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${(newAdRequest as any).type === 'sms' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    Campaña SMS
+                  </button>
+                </div>
+
                 <div>
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">Título de la Campaña</label>
                   <input 
@@ -1883,22 +2448,50 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     onChange={(e) => setNewAdRequest({...newAdRequest, title: e.target.value})}
                   />
                 </div>
+
+                {(newAdRequest as any).type === 'banner' ? (
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">URL de la Imagen (Banner)</label>
+                    <input 
+                      type="text" 
+                      className="w-full px-6 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-2xl font-bold outline-none transition-all"
+                      placeholder="https://ejemplo.com/banner.jpg"
+                      value={newAdRequest.imageUrl}
+                      onChange={(e) => setNewAdRequest({...newAdRequest, imageUrl: e.target.value})}
+                    />
+                    <p className="text-[8px] text-slate-400 mt-2 ml-4 uppercase font-bold">Si se deja vacío, se generará una imagen aleatoria.</p>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">Tipo de Notificación SMS</label>
+                    <select 
+                      className="w-full px-6 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-2xl font-bold outline-none transition-all appearance-none"
+                      value={(newAdRequest as any).smsType}
+                      onChange={(e) => setNewAdRequest({...newAdRequest, smsType: e.target.value} as any)}
+                    >
+                      <option value="promotion">Promoción General</option>
+                      <option value="not_purchased">Retargeting (No comprado)</option>
+                      <option value="cross_sell">Cross-selling (Complementos)</option>
+                    </select>
+                  </div>
+                )}
+
                 <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">URL de la Imagen (Banner)</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">Enlace Externo (Opcional)</label>
                   <input 
                     type="text" 
                     className="w-full px-6 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-2xl font-bold outline-none transition-all"
-                    placeholder="https://ejemplo.com/banner.jpg"
-                    value={newAdRequest.imageUrl}
-                    onChange={(e) => setNewAdRequest({...newAdRequest, imageUrl: e.target.value})}
+                    placeholder="https://tu-tienda.com/oferta"
+                    value={(newAdRequest as any).externalLink}
+                    onChange={(e) => setNewAdRequest({...newAdRequest, externalLink: e.target.value} as any)}
                   />
-                  <p className="text-[8px] text-slate-400 mt-2 ml-4 uppercase font-bold">Si se deja vacío, se generará una imagen aleatoria.</p>
                 </div>
+
                 <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">Descripción / Objetivo</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">Descripción / Mensaje</label>
                   <textarea 
                     className="w-full px-6 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-2xl font-bold outline-none transition-all h-24 resize-none"
-                    placeholder="Describe el contenido y dónde quieres que se muestre..."
+                    placeholder={(newAdRequest as any).type === 'banner' ? "Describe el contenido y dónde quieres que se muestre..." : "Escribe el mensaje que recibirán los clientes..."}
                     value={newAdRequest.description}
                     onChange={(e) => setNewAdRequest({...newAdRequest, description: e.target.value})}
                   ></textarea>
@@ -2085,6 +2678,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
         )}
+        <ProductModal 
+          isOpen={showProductModal}
+          onClose={() => { setShowProductModal(false); setEditingProduct(null); }}
+          product={editingProduct || newProduct}
+          onSave={handleSaveProduct}
+          onChange={(p) => editingProduct ? setEditingProduct(p) : setNewProduct(p)}
+        />
       </main>
     </div>
   );
@@ -2143,6 +2743,162 @@ const InventoryMiniItem: React.FC<{ label: string; value: number; total: number 
           className={`h-full transition-all duration-1000 rounded-full ${percentage < 20 ? 'bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]' : 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]'}`} 
           style={{ width: `${percentage}%` }}
         ></div>
+      </div>
+    </div>
+  );
+};
+
+const ProductModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  product: Product | Partial<Product>;
+  onSave: () => void;
+  onChange: (p: any) => void;
+}> = ({ isOpen, onClose, product, onSave, onChange }) => {
+  if (!isOpen) return null;
+
+  const addVariation = () => {
+    const variations = [...(product.variations || []), { sku: '', size: '', color: '', stock: 0, isActive: true }];
+    onChange({ ...product, variations });
+  };
+
+  const updateVariation = (index: number, field: string, value: any) => {
+    const variations = [...(product.variations || [])];
+    variations[index] = { ...variations[index], [field]: value };
+    onChange({ ...product, variations });
+  };
+
+  const removeVariation = (index: number) => {
+    const variations = product.variations?.filter((_, i) => i !== index);
+    onChange({ ...product, variations });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-slate-900/80 backdrop-blur-xl animate-in fade-in duration-300">
+      <div className="bg-white w-full max-w-4xl rounded-[3rem] shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300">
+        <div className="p-8 sm:p-12 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+          <div>
+            <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+              {product.id ? 'Editar Producto' : 'Nuevo Producto'}
+            </h3>
+            <p className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-[0.2em] mt-2">Gestión de Inventario y Variaciones</p>
+          </div>
+          <button onClick={onClose} className="p-4 hover:bg-white rounded-full transition-all hover:shadow-lg text-slate-400 hover:text-slate-900">
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+        
+        <div className="p-8 sm:p-12 overflow-y-auto flex-1 space-y-10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+            <div className="space-y-3">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nombre del Producto</label>
+              <input 
+                type="text" 
+                value={product.name}
+                onChange={(e) => onChange({ ...product, name: e.target.value })}
+                className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-2xl px-6 py-4 font-bold text-slate-700 transition-all outline-none"
+                placeholder="Ej: Camisa Lino Blanca"
+              />
+            </div>
+            <div className="space-y-3">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Categoría</label>
+              <input 
+                type="text" 
+                value={product.category}
+                onChange={(e) => onChange({ ...product, category: e.target.value })}
+                className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-2xl px-6 py-4 font-bold text-slate-700 transition-all outline-none"
+                placeholder="Ej: Tops, Pantalones..."
+              />
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest">Variaciones (Talla / Color / Stock)</h4>
+              <button 
+                onClick={addVariation}
+                className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-700 flex items-center gap-2 bg-indigo-50 px-4 py-2 rounded-xl transition-all"
+              >
+                <Plus className="w-3 h-3" />
+                Agregar Variación
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              {product.variations?.map((v, i) => (
+                <div key={i} className="grid grid-cols-1 sm:grid-cols-5 gap-4 bg-slate-50 p-6 rounded-[2rem] border border-slate-100 relative group">
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">SKU</label>
+                    <input 
+                      type="text" 
+                      value={v.sku}
+                      onChange={(e) => updateVariation(i, 'sku', e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold text-slate-700"
+                      placeholder="SKU-123"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Talla</label>
+                    <input 
+                      type="text" 
+                      value={v.size}
+                      onChange={(e) => updateVariation(i, 'size', e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold text-slate-700"
+                      placeholder="S, M, L, 32..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Color</label>
+                    <input 
+                      type="text" 
+                      value={v.color}
+                      onChange={(e) => updateVariation(i, 'color', e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold text-slate-700"
+                      placeholder="Blanco, Azul..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Stock</label>
+                    <input 
+                      type="number" 
+                      value={v.stock}
+                      onChange={(e) => updateVariation(i, 'stock', parseInt(e.target.value))}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold text-slate-700"
+                    />
+                  </div>
+                  <div className="flex items-end justify-end">
+                    <button 
+                      onClick={() => removeVariation(i)}
+                      className="p-3 text-rose-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {(!product.variations || product.variations.length === 0) && (
+                <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-[2.5rem] bg-slate-50/50">
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No hay variaciones definidas</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-8 sm:p-12 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row gap-4">
+          <button 
+            onClick={onClose}
+            className="flex-1 px-8 py-5 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-500 hover:bg-white transition-all"
+          >
+            Cancelar
+          </button>
+          <button 
+            onClick={onSave}
+            className="flex-1 bg-indigo-600 text-white px-8 py-5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all"
+          >
+            Guardar Producto
+          </button>
+        </div>
       </div>
     </div>
   );
