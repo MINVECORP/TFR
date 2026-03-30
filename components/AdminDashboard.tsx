@@ -119,25 +119,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       storeId: currentStore?.id || '1',
       event: 'abandonment',
       action: 'discount_coupon',
-      waitTime: 2,
+      waitTimeHours: 2,
       isActive: true,
-      requirement: 'price > 50'
+      requirement: 'price > 50',
+      discountPercent: 10
     },
     {
       id: '2',
       storeId: currentStore?.id || '1',
       event: 'abandonment',
       action: 'discount_coupon',
-      waitTime: 48,
+      waitTimeHours: 48,
       isActive: true,
-      requirement: 'price > 100'
+      requirement: 'price > 100',
+      discountPercent: 15
     },
     {
       id: '3',
       storeId: currentStore?.id || '1',
       event: 'purchase',
       action: 'complementary_suggestion',
-      waitTime: 24,
+      waitTimeHours: 24,
       isActive: true
     }
   ]);
@@ -147,14 +149,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     totalClicks: 308,
     totalConversions: 45,
     recoveredRevenue: 4520,
-    costPerAcquisition: 2.5,
+    costPerAcquisition: 0.05,
     roi: 15.2
   }), []);
 
   const [newSmartCampaign, setNewSmartCampaign] = useState<Partial<SmartCampaign>>({
     event: 'abandonment',
     action: 'discount_coupon',
-    waitTime: 2,
+    waitTimeHours: 2,
     isActive: true
   });
 
@@ -185,13 +187,39 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
+  const handleCreateSmartCampaign = () => {
+    if (!newSmartCampaign.event || !newSmartCampaign.action) return;
+    
+    const campaign: SmartCampaign = {
+      id: Math.random().toString(36).substr(2, 9),
+      storeId: currentStore?.id || '1',
+      event: newSmartCampaign.event as 'abandonment' | 'purchase',
+      action: newSmartCampaign.action as 'discount_coupon' | 'complementary_suggestion',
+      waitTimeHours: newSmartCampaign.waitTimeHours || 2,
+      isActive: true,
+      requirement: newSmartCampaign.requirement,
+      discountPercent: newSmartCampaign.discountPercent
+    };
+    
+    setSmartCampaigns([...smartCampaigns, campaign]);
+    setShowCreateSmartCampaign(false);
+    setNewSmartCampaign({
+      event: 'abandonment',
+      action: 'discount_coupon',
+      waitTimeHours: 2,
+      isActive: true
+    });
+  };
+
   const simulateConversion = async (type: 'Online' | 'Física') => {
     try {
       const response = await fetch('/api/marketing/pixel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sessionId: `SESS_${Math.floor(Math.random() * 10000)}`,
+          campaignId: smartCampaigns[0]?.id || 'test-campaign',
+          customerId: 'test-customer',
+          orderId: `ORD-${Date.now()}`,
           amount: Math.floor(Math.random() * 200) + 50,
           type
         })
@@ -200,6 +228,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         const salesRes = await fetch('/api/marketing/sales');
         const salesData = await salesRes.json();
         setRecoveredSales(salesData);
+        setSmsStatus({ success: true, message: 'Conversión registrada exitosamente' });
       }
     } catch (error) {
       console.error("Error simulating conversion:", error);
@@ -537,6 +566,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (response.ok && data.success) {
         const newCampaign: SMSCampaign = {
           id: `SMS-${Date.now()}`,
+          sessionId: 'manual-trigger',
           customerId,
           storeId,
           type,
@@ -544,7 +574,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           message,
           sentAt: Date.now(),
           status: 'sent',
-          shortUrl: `pd.go/${Math.random().toString(36).substring(7)}`
+          shortUrl: `pd.go/${Math.random().toString(36).substring(7)}`,
+          isConverted: false
         };
         setSmsCampaigns(prev => [...prev, newCampaign]);
         setSmsStatus({ success: true, message: '¡SMS enviado con éxito!' });
@@ -1578,6 +1609,144 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
              </div>
           )}
 
+          {!isSuperAdmin && activeTab === 'marketing' && (
+            <div className="space-y-10">
+              {/* Marketing Metrics */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Mensajes Enviados</p>
+                  <h4 className="text-3xl font-black text-slate-900">{marketingMetrics.totalSent}</h4>
+                  <p className="text-xs text-slate-400 font-bold mt-2">Acumulado mensual</p>
+                </div>
+                <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Clics en Enlaces</p>
+                  <h4 className="text-3xl font-black text-indigo-500">{marketingMetrics.totalClicks}</h4>
+                  <p className="text-xs text-indigo-400 font-bold mt-2">{(marketingMetrics.totalClicks / marketingMetrics.totalSent * 100).toFixed(1)}% CTR</p>
+                </div>
+                <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Conversiones</p>
+                  <h4 className="text-3xl font-black text-emerald-500">{marketingMetrics.totalConversions}</h4>
+                  <p className="text-xs text-emerald-400 font-bold mt-2">Ventas recuperadas</p>
+                </div>
+                <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">ROI Estimado</p>
+                  <h4 className="text-3xl font-black text-amber-500">{marketingMetrics.roi}x</h4>
+                  <p className="text-xs text-amber-400 font-bold mt-2">Retorno de inversión</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Campaigns List */}
+                <div className="lg:col-span-2 space-y-6">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-2xl font-black text-slate-900">Campañas Inteligentes</h3>
+                    <div className="flex gap-3">
+                      <button 
+                        onClick={simulateConversion}
+                        className="bg-slate-100 text-slate-600 px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 transition-all flex items-center gap-2"
+                      >
+                        <Activity className="w-4 h-4" />
+                        Simular Venta
+                      </button>
+                      <button 
+                        onClick={() => setShowCreateSmartCampaign(true)}
+                        className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center gap-2"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Nueva Automatización
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl overflow-hidden">
+                    <table className="w-full text-left">
+                      <thead className="bg-slate-50">
+                        <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          <th className="px-8 py-6">Evento Disparador</th>
+                          <th className="px-8 py-6">Acción Automática</th>
+                          <th className="px-8 py-6">Espera</th>
+                          <th className="px-8 py-6">Estado</th>
+                          <th className="px-8 py-6 text-right">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {smartCampaigns.map(campaign => (
+                          <tr key={campaign.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-8 py-6">
+                              <div className="flex items-center gap-3">
+                                {campaign.event === 'abandonment' ? <Clock className="w-4 h-4 text-amber-500" /> : <ShoppingCart className="w-4 h-4 text-emerald-500" />}
+                                <span className="font-bold text-slate-700 capitalize">{campaign.event === 'abandonment' ? 'Abandono de Probador' : 'Compra Realizada'}</span>
+                              </div>
+                            </td>
+                            <td className="px-8 py-6">
+                              <span className="text-xs font-medium text-slate-500">
+                                {campaign.action === 'discount_coupon' ? `Cupón de Descuento (${campaign.discountPercent}%)` : 'Sugerencia Complementaria'}
+                              </span>
+                            </td>
+                            <td className="px-8 py-6 text-xs font-bold text-slate-400">{campaign.waitTimeHours}h</td>
+                            <td className="px-8 py-6">
+                              <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${campaign.isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-400'}`}>
+                                {campaign.isActive ? 'Activa' : 'Pausada'}
+                              </span>
+                            </td>
+                            <td className="px-8 py-6 text-right">
+                              <button className="p-2 text-slate-300 hover:text-indigo-600 transition-colors">
+                                <Settings className="w-5 h-5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Workflow Visualization */}
+                  <div className="bg-white rounded-[2.5rem] border border-slate-200 p-10 shadow-sm">
+                    <h3 className="text-xl font-black text-slate-900 mb-8 flex items-center gap-3">
+                      <TrendingUp className="w-5 h-5 text-indigo-500" />
+                      Flujo de Automatización
+                    </h3>
+                    <TriggerWorkflow />
+                  </div>
+                </div>
+
+                {/* Preview and Tips */}
+                <div className="space-y-8">
+                  <div className="bg-slate-900 rounded-[2.5rem] p-8 shadow-xl text-white overflow-hidden relative">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full -mr-16 -mt-16"></div>
+                    <h3 className="text-lg font-black mb-6 flex items-center gap-2">
+                      <Smartphone className="w-5 h-5 text-indigo-400" />
+                      Vista Previa SMS
+                    </h3>
+                    <MarketingNotificationPreview 
+                      type={smartCampaigns[0]?.event === 'abandonment' ? 'abandonment' : 'cross_sell'}
+                      customerName="Ana García"
+                      productName="Vestido Floral"
+                      discountCode="FITTING10"
+                    />
+                  </div>
+
+                  <div className="bg-indigo-50 rounded-[2.5rem] p-8 border border-indigo-100">
+                    <h4 className="text-sm font-black text-indigo-900 uppercase tracking-widest mb-4">Tips de Conversión</h4>
+                    <ul className="space-y-4">
+                      <li className="flex gap-3">
+                        <div className="w-5 h-5 bg-indigo-200 rounded-full flex-shrink-0 flex items-center justify-center text-indigo-600 text-[10px] font-black">1</div>
+                        <p className="text-xs text-indigo-700 leading-relaxed font-medium">Envía el recordatorio de abandono entre 2 y 4 horas después de la sesión para máxima efectividad.</p>
+                      </li>
+                      <li className="flex gap-3">
+                        <div className="w-5 h-5 bg-indigo-200 rounded-full flex-shrink-0 flex items-center justify-center text-indigo-600 text-[10px] font-black">2</div>
+                        <p className="text-xs text-indigo-700 leading-relaxed font-medium">Los cupones del 10% tienen la mejor relación costo/beneficio en retargeting.</p>
+                      </li>
+                      <li className="flex gap-3">
+                        <div className="w-5 h-5 bg-indigo-200 rounded-full flex-shrink-0 flex items-center justify-center text-indigo-600 text-[10px] font-black">3</div>
+                        <p className="text-xs text-indigo-700 leading-relaxed font-medium">Personaliza siempre con el nombre del cliente y la prenda que se probó.</p>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           {(activeTab === 'users' || activeTab === 'staff') && (
             <div className="space-y-8">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-4">
@@ -2685,6 +2854,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           onSave={handleSaveProduct}
           onChange={(p) => editingProduct ? setEditingProduct(p) : setNewProduct(p)}
         />
+        <SmartCampaignModal 
+          isOpen={showCreateSmartCampaign}
+          onClose={() => setShowCreateSmartCampaign(false)}
+          campaign={newSmartCampaign}
+          onSave={handleCreateSmartCampaign}
+          onChange={(c) => setNewSmartCampaign(c)}
+        />
       </main>
     </div>
   );
@@ -2898,6 +3074,98 @@ const ProductModal: React.FC<{
           >
             Guardar Producto
           </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SmartCampaignModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  campaign: Partial<SmartCampaign>;
+  onSave: () => void;
+  onChange: (c: any) => void;
+}> = ({ isOpen, onClose, campaign, onSave, onChange }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-xl animate-in fade-in duration-300">
+      <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-300">
+        <div className="p-10 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+          <div>
+            <h3 className="text-2xl font-black text-slate-900 tracking-tight">Nueva Automatización</h3>
+            <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mt-2">Configura disparadores inteligentes</p>
+          </div>
+          <button onClick={onClose} className="p-4 hover:bg-white rounded-full transition-all text-slate-400">
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+        
+        <div className="p-10 space-y-8">
+          <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-3">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Evento Disparador</label>
+              <select 
+                value={campaign.event}
+                onChange={(e) => onChange({ ...campaign, event: e.target.value })}
+                className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-2xl px-6 py-4 font-bold text-slate-700 transition-all outline-none"
+              >
+                <option value="abandonment">Abandono de Probador</option>
+                <option value="purchase">Compra Realizada</option>
+              </select>
+            </div>
+            <div className="space-y-3">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Acción Automática</label>
+              <select 
+                value={campaign.action}
+                onChange={(e) => onChange({ ...campaign, action: e.target.value })}
+                className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-2xl px-6 py-4 font-bold text-slate-700 transition-all outline-none"
+              >
+                <option value="discount_coupon">Enviar Cupón de Descuento</option>
+                <option value="complementary_suggestion">Sugerencia Complementaria</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-3">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tiempo de Espera (Horas)</label>
+              <input 
+                type="number" 
+                value={campaign.waitTimeHours}
+                onChange={(e) => onChange({ ...campaign, waitTimeHours: parseInt(e.target.value) })}
+                className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-2xl px-6 py-4 font-bold text-slate-700 transition-all outline-none"
+              />
+            </div>
+            {campaign.action === 'discount_coupon' && (
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">% de Descuento</label>
+                <input 
+                  type="number" 
+                  value={campaign.discountPercent}
+                  onChange={(e) => onChange({ ...campaign, discountPercent: parseInt(e.target.value) })}
+                  className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-2xl px-6 py-4 font-bold text-slate-700 transition-all outline-none"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Requisito (Opcional)</label>
+            <input 
+              type="text" 
+              value={campaign.requirement}
+              onChange={(e) => onChange({ ...campaign, requirement: e.target.value })}
+              className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-2xl px-6 py-4 font-bold text-slate-700 transition-all outline-none"
+              placeholder="Ej: price > 100"
+            />
+          </div>
+        </div>
+
+        <div className="p-10 border-t border-slate-100 bg-slate-50/50 flex gap-4">
+          <button onClick={onClose} className="flex-1 px-8 py-5 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-500 hover:bg-white transition-all">Cancelar</button>
+          <button onClick={onSave} className="flex-1 bg-indigo-600 text-white px-8 py-5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all">Crear Automatización</button>
         </div>
       </div>
     </div>

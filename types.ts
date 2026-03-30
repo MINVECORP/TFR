@@ -186,16 +186,18 @@ export interface SmartCampaign {
   storeId: string;
   event: 'abandonment' | 'purchase' | 'out_of_stock';
   action: 'discount_coupon' | 'complementary_suggestion' | 'back_in_stock_alert';
-  waitTime: number; // in hours
+  waitTimeHours: number;
   requirement?: string; // e.g., "price > 50"
+  discountPercent?: number;
   isActive: boolean;
 }
 
 export interface SMSCampaign {
   id: string;
+  sessionId: string;
   customerId: string; // phone number
   storeId: string;
-  type: 'retargeting' | 'cross_sell' | 'urgency';
+  type: 'retargeting' | 'urgency' | 'cross_sell';
   sku: string;
   message: string;
   sentAt: number;
@@ -209,6 +211,7 @@ export interface SMSCampaign {
   };
   shortUrl: string;
   couponCode?: string;
+  isConverted: boolean;
 }
 
 export interface MarketingMetrics {

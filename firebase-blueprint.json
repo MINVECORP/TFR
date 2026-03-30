@@ -36,9 +36,72 @@
         "category": { "type": "string" },
         "price": { "type": "number" },
         "stock": { "type": "number" },
-        "storeId": { "type": "string" }
+        "storeId": { "type": "string" },
+        "imageUrl": { "type": "string" }
       },
       "required": ["sku", "name", "price", "stock", "storeId"]
+    },
+    "Campaign": {
+      "title": "Campaign",
+      "description": "Marketing trigger configurations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "storeId": { "type": "string" },
+        "type": { "type": "string", "enum": ["RE_ENGAGEMENT", "CROSS_SELLING"] },
+        "waitTimeHours": { "type": "number" },
+        "discountCode": { "type": "string" },
+        "discountPercent": { "type": "number" },
+        "minPriceThreshold": { "type": "number" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["id", "storeId", "type", "waitTimeHours", "isActive"]
+    },
+    "FittingRoomSession": {
+      "title": "FittingRoomSession",
+      "description": "Tracking items tried on in fitting rooms",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "storeId": { "type": "string" },
+        "staffId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "customerEmail": { "type": "string" },
+        "items": { 
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "sku": { "type": "string" },
+              "status": { "type": "string", "enum": ["TRIED_ON", "PURCHASED", "ABANDONED"] },
+              "timestamp": { "type": "string", "format": "date-time" }
+            }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "storeId", "staffId", "items", "createdAt"]
+    },
+    "MarketingLog": {
+      "title": "MarketingLog",
+      "description": "Tracking sent messages and conversions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "storeId": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "type": { "type": "string", "enum": ["SMS", "EMAIL"] },
+        "campaignType": { "type": "string", "enum": ["RE_ENGAGEMENT", "CROSS_SELLING"] },
+        "status": { "type": "string", "enum": ["SENT", "CLICKED", "CONVERTED"] },
+        "sentAt": { "type": "string", "format": "date-time" },
+        "clickedAt": { "type": "string", "format": "date-time" },
+        "convertedAt": { "type": "string", "format": "date-time" },
+        "revenue": { "type": "number" },
+        "sku": { "type": "string" }
+      },
+      "required": ["id", "storeId", "sessionId", "type", "campaignType", "status", "sentAt"]
     }
   },
   "firestore": {
@@ -53,6 +116,18 @@
     "/products/{productId}": {
       "schema": "Product",
       "description": "Product inventory"
+    },
+    "/campaigns/{campaignId}": {
+      "schema": "Campaign",
+      "description": "Marketing campaigns"
+    },
+    "/fittingRoomSessions/{sessionId}": {
+      "schema": "FittingRoomSession",
+      "description": "Fitting room sessions"
+    },
+    "/marketingLogs/{logId}": {
+      "schema": "MarketingLog",
+      "description": "Marketing event logs"
     }
   }
 }

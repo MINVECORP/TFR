@@ -505,6 +505,55 @@ const App: React.FC = () => {
                   auditData[item.sku] === ItemExitDestination.MISSING ? ItemStatus.MISSING : ItemStatus.OUT
         }));
 
+        // --- Marketing Automation Trigger ---
+        const triggerMarketing = async () => {
+          const store = stores.find(st => st.id === currentUser.storeId);
+          if (!store) return;
+
+          // 1. Abandono de Prenda (Retargeting)
+          const abandonedItems = s.items.filter(item => 
+            auditData[item.sku] === ItemExitDestination.RELOCATION || 
+            auditData[item.sku] === ItemExitDestination.MISSING
+          );
+
+          for (const item of abandonedItems) {
+            const product = products.find(p => p.sku === item.sku);
+            if (product) {
+              await axios.post('/api/marketing/trigger-automation', {
+                customerPhone: s.customerPhone,
+                customerName: s.customerName || 'Cliente',
+                productName: product.name,
+                storeName: store.name,
+                productUrl: `${window.location.origin}/product/${product.id}`,
+                scenario: 'retargeting',
+                sessionId: s.id
+              });
+            }
+          }
+
+          // 2. Compra Exitosa (Cross-selling)
+          const purchasedItems = s.items.filter(item => 
+            auditData[item.sku] === ItemExitDestination.PURCHASE
+          );
+
+          for (const item of purchasedItems) {
+            const product = products.find(p => p.sku === item.sku);
+            if (product) {
+              await axios.post('/api/marketing/trigger-automation', {
+                customerPhone: s.customerPhone,
+                customerName: s.customerName || 'Cliente',
+                productName: product.name,
+                storeName: store.name,
+                productUrl: `${window.location.origin}/product/${product.id}`,
+                scenario: 'cross_selling',
+                sessionId: s.id
+              });
+            }
+          }
+        };
+
+        triggerMarketing();
+
         return { ...s, items: updatedItems, status: SessionStatus.CLOSED, endTime: timestamp };
       }
       return s;
