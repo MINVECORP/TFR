@@ -178,6 +178,9 @@ async function startServer() {
       return res.status(400).json({ error: "Missing 'to' or 'message' field" });
     }
 
+    // Ensure message is within 160 characters
+    const finalMessage = message.length > 160 ? message.substring(0, 157) + "..." : message;
+
     try {
       console.log(`[LabsMobile] Sending SMS to ${to}...`);
       
@@ -187,7 +190,7 @@ async function startServer() {
       const response = await axios.post(
         "https://api.labsmobile.com/json/send",
         {
-          message: message,
+          message: finalMessage,
           tpoa: tpoa,
           recipient: [
             {
@@ -321,6 +324,11 @@ async function startServer() {
       message = `${customerName}, quedan pocas unidades de tu ${productName} en tu talla. 😱 No dejes que se agote. Muestra el código ${couponCode} en caja o usa este link: ${uniqueShortUrl}`;
     } else if (scenario === 'cross_selling') {
       message = `¡Hola ${customerName}! Esperamos que disfrutes tu compra en ${storeName}. Para completar tu look, usa el código ${couponCode} aquí: ${uniqueShortUrl}`;
+    }
+
+    // Truncate to 160 characters if necessary
+    if (message.length > 160) {
+      message = message.substring(0, 157) + "...";
     }
 
     console.log(`[Automation] Triggering ${scenario} for ${customerPhone}`);

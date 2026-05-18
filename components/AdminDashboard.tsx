@@ -77,10 +77,11 @@ interface AdminDashboardProps {
   setInventoryAlerts: React.Dispatch<React.SetStateAction<InventoryAlert[]>>;
   smsCampaigns: SMSCampaign[];
   setSmsCampaigns: React.Dispatch<React.SetStateAction<SMSCampaign[]>>;
+  darkMode: boolean;
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
-  user, onLogout, products, setProducts, logs, sessions, storeConfig, setStoreConfig, customers, users, setUsers, stores, setStores, brands, setBrands, adRequests, setAdRequests, inventoryAlerts, setInventoryAlerts, smsCampaigns, setSmsCampaigns
+  user, onLogout, products, setProducts, logs, sessions, storeConfig, setStoreConfig, customers, users, setUsers, stores, setStores, brands, setBrands, adRequests, setAdRequests, inventoryAlerts, setInventoryAlerts, smsCampaigns, setSmsCampaigns, darkMode
 }) => {
   const isSuperAdmin = user.role === Role.SUPER_ADMIN;
   
@@ -168,21 +169,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       title: "¡Vuelve por lo que amas! ✨",
       message: `Te veías genial con el Vestido Floral en ${currentStore?.name || 'Perchero Digital'}. ¿Te faltó un empujoncito? Llévatelo hoy con 10% OFF usando el código PROBA15 aquí: pd.go/xyz123`,
       buttonText: "Comprar Ahora",
-      image: "https://images.unsplash.com/photo-1539109132384-361555754525?auto=format&fit=crop&w=300&q=80",
+      image: "https://images.unsplash.com/photo-1515372039744-b8f02a3ae446?auto=format&fit=crop&w=600&q=80",
       coupon: "PROBA15"
     },
     urgency: {
       title: "¡Últimas unidades! 😱",
       message: `Quedan pocas unidades de tu Vestido Floral en tu talla. No dejes que se agote. Muestra el código PROBA22 en caja o usa este link: pd.go/xyz123`,
       buttonText: "Ver Stock",
-      image: "https://images.unsplash.com/photo-1539109132384-361555754525?auto=format&fit=crop&w=300&q=80",
+      image: "https://images.unsplash.com/photo-1572804013307-a9a11198427e?auto=format&fit=crop&w=600&q=80",
       coupon: "PROBA22"
     },
     cross_selling: {
       title: "Completa el Look 👗",
       message: `Esperamos que disfrutes tu compra. Para completar tu look, usa el código PROBA88 aquí: pd.go/abc456`,
       buttonText: "Ver Accesorios",
-      image: "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=300&q=80",
+      image: "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=600&q=80",
       coupon: "PROBA88"
     }
   };
@@ -549,6 +550,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       const brand = brands.find(b => b.id === store?.brandId);
       const brandTpoa = brand?.name?.replace(/[^a-zA-Z0-9]/g, '').substring(0, 11) || 'tienda';
 
+      // Truncate to 160 characters
+      const finalMessage = message.length > 160 ? message.substring(0, 157) + "..." : message;
+
       const response = await fetch('/api/sms/send', {
         method: 'POST',
         headers: {
@@ -556,7 +560,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         },
         body: JSON.stringify({
           to: customerId, // customerId is the phone number in this context
-          message,
+          message: finalMessage,
           tpoa: brandTpoa,
         }),
       });
@@ -592,7 +596,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
+    <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden font-sans transition-colors duration-500">
       {/* MODAL CREAR TIENDA */}
       {showCreateStore && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
@@ -812,10 +816,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <p className="text-[10px] text-slate-400 italic">Ninguna prenda comprada</p>
                         ) : (
                           session.itemsSold.map(sku => {
-                            const product = products.find(p => p.sku === sku);
+                            const product = products.find(p => p.variations.some(v => v.sku === sku));
                             return (
                               <div key={sku} className="flex items-center gap-3 bg-white p-2 rounded-xl border border-slate-100">
-                                <img src={product?.image} className="w-8 h-8 rounded-lg object-cover" referrerPolicy="no-referrer" />
+                                <img src={product?.imageUrl} className="w-8 h-8 rounded-lg object-cover" referrerPolicy="no-referrer" />
                                 <div>
                                   <p className="text-[10px] font-bold text-slate-800">{product?.name || sku}</p>
                                   <p className="text-[8px] text-slate-400 uppercase font-black">{product?.category}</p>
@@ -837,10 +841,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <p className="text-[10px] text-slate-400 italic">Ninguna prenda dejada</p>
                         ) : (
                           session.itemsLeft.map(sku => {
-                            const product = products.find(p => p.sku === sku);
+                            const product = products.find(p => p.variations.some(v => v.sku === sku));
                             return (
                               <div key={sku} className="flex items-center gap-3 bg-white p-2 rounded-xl border border-slate-100 opacity-75">
-                                <img src={product?.image} className="w-8 h-8 rounded-lg object-cover grayscale" referrerPolicy="no-referrer" />
+                                <img src={product?.imageUrl} className="w-8 h-8 rounded-lg object-cover grayscale" referrerPolicy="no-referrer" />
                                 <div>
                                   <p className="text-[10px] font-bold text-slate-800">{product?.name || sku}</p>
                                   <p className="text-[8px] text-slate-400 uppercase font-black">{product?.category}</p>
@@ -999,35 +1003,35 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         )}
 
-        <header className="bg-white/80 backdrop-blur-xl border-b border-slate-200 px-4 sm:px-6 lg:px-10 py-4 sm:py-6 sticky top-0 z-30 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 sm:gap-6">
+        <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 lg:px-10 py-4 sm:py-6 sticky top-0 z-30 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 sm:gap-6">
           <div className="flex items-center justify-between w-full md:w-auto gap-4">
              <div className="flex items-center gap-4">
                 <button 
                   onClick={() => setIsSidebarOpen(true)}
-                  className="lg:hidden p-2 bg-slate-100 rounded-xl text-slate-600"
+                  className="lg:hidden p-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-600 dark:text-slate-400"
                 >
                   <Menu className="w-6 h-6" />
                 </button>
-                <div className={`p-2 rounded-lg ${isSuperAdmin ? 'bg-amber-50' : 'bg-indigo-50'}`}>
-                    {isSuperAdmin ? <Layers className="w-5 h-5 text-amber-600" /> : <MapPin className="w-5 h-5 text-indigo-600" />}
+                <div className={`p-2 rounded-lg ${isSuperAdmin ? 'bg-amber-50 dark:bg-amber-500/10' : 'bg-indigo-50 dark:bg-indigo-500/10'}`}>
+                    {isSuperAdmin ? <Layers className="w-5 h-5 text-amber-600 dark:text-amber-500" /> : <MapPin className="w-5 h-5 text-indigo-600 dark:text-indigo-500" />}
                 </div>
                 <div>
-                    <h2 className="text-xl lg:text-2xl font-black text-slate-900 tracking-tight leading-none capitalize">
+                    <h2 className="text-xl lg:text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-none capitalize">
                       {activeTab.replace('_', ' ')}
                     </h2>
-                    <p className="hidden sm:block text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1.5">
+                    <p className="hidden sm:block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mt-1.5">
                       {isSuperAdmin ? 'Consola de Administración Central' : 'Panel de Control Local'}
                     </p>
                 </div>
              </div>
           </div>
           
-          <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200/60 overflow-x-auto max-w-full no-scrollbar">
+          <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl border border-slate-200/60 dark:border-slate-700 overflow-x-auto max-w-full no-scrollbar">
              {(['day', 'week', 'month'] as TimeRange[]).map(range => (
                <button 
                 key={range}
                 onClick={() => setTimeRange(range)}
-                className={`px-4 lg:px-6 py-2 rounded-xl text-[10px] font-black transition-all whitespace-nowrap ${timeRange === range ? 'bg-white text-slate-900 shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+                className={`px-4 lg:px-6 py-2 rounded-xl text-[10px] font-black transition-all whitespace-nowrap ${timeRange === range ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-md' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
                >
                  {range.toUpperCase()}
                </button>
@@ -1047,8 +1051,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <StatCard label="Alertas Sistema" value="0" icon={<ShieldAlert />} theme="emerald" />
               </div>
               
-              <div className="bg-white rounded-[2.5rem] border border-slate-200 p-10 shadow-sm">
-                <h3 className="text-xl font-black text-slate-900 mb-8 flex items-center gap-3">
+              <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 p-10 shadow-sm">
+                <h3 className="text-xl font-black text-slate-900 dark:text-white mb-8 flex items-center gap-3">
                    <BarChart3 className="w-5 h-5 text-amber-500" />
                    Rendimiento Comparativo por Tienda
                 </h3>
@@ -1059,12 +1063,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       ventas: logs.filter(l => l.action === 'sold').length / stores.length, // Simulated
                       visitas: sessions.length / stores.length // Simulated
                     }))}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={darkMode ? '#1e293b' : '#f1f5f9'} />
                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }} />
                       <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }} />
-                      <Tooltip />
+                      <Tooltip contentStyle={{ backgroundColor: darkMode ? '#0f172a' : '#fff', borderColor: darkMode ? '#1e293b' : '#f1f5f9', color: darkMode ? '#fff' : '#000' }} />
                       <Bar dataKey="ventas" fill="#f59e0b" radius={[8, 8, 0, 0]} barSize={40} />
-                      <Bar dataKey="visitas" fill="#cbd5e1" radius={[8, 8, 0, 0]} barSize={40} />
+                      <Bar dataKey="visitas" fill={darkMode ? '#334155' : '#cbd5e1'} radius={[8, 8, 0, 0]} barSize={40} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -1764,20 +1768,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                  </div>
                  <button 
                   onClick={() => {
-                    if (!isSuperAdmin) {
-                      const name = prompt('Nombre del Staff:');
-                      const email = prompt('Email del Staff:');
-                      if (name && email) {
-                        const newUser: User = {
-                          id: Math.random().toString(36).substr(2, 9),
-                          name,
-                          email,
-                          role: Role.STAFF,
-                          storeId: currentStore?.id,
-                          isFirstLogin: true
-                        };
-                        setUsers(prev => [...prev, newUser]);
+                    const name = prompt('Nombre Completo:');
+                    const email = prompt('Email / Teléfono:');
+                    const roleStr = prompt(`Rol (${Object.values(Role).join(', ')}):`, isSuperAdmin ? Role.STORE_ADMIN : Role.STAFF);
+                    
+                    if (name && email && roleStr) {
+                      const role = roleStr.toUpperCase() as Role;
+                      if (!Object.values(Role).includes(role)) {
+                        alert('Rol inválido');
+                        return;
                       }
+
+                      const newUser: User = {
+                        id: Math.random().toString(36).substr(2, 9),
+                        name,
+                        email,
+                        role,
+                        storeId: isSuperAdmin ? undefined : currentStore?.id,
+                        isFirstLogin: true
+                      };
+                      setUsers(prev => [...prev, newUser]);
                     }
                   }}
                   className={`w-full sm:w-auto px-6 py-3 rounded-xl text-white font-black text-xs uppercase tracking-widest shadow-xl transition-all ${theme.primary}`}
@@ -2765,7 +2775,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   {notTakenSkus.length > 0 ? notTakenSkus.map(sku => (
                                     <div key={sku} className="group relative">
                                       <button 
-                                        onClick={() => handleSendSMS(customer.phone as string, selectedStoreIdForDetail as string, 'retargeting', sku as string, `Hola ${customer.name || 'Cliente'}, ¡vimos que te gustó la referencia ${sku}! Llévatela hoy con un 10% de descuento en ${stores.find(s => s.id === selectedStoreIdForDetail)?.name}.`)}
+                                        onClick={() => handleSendSMS(customer.phone as string, selectedStoreIdForDetail as string, 'retargeting', sku as string, `Hola ${customer.name || 'Cliente'}, ¡vimos que te gustó ${sku}! Llévatela hoy con 10% OFF en ${stores.find(s => s.id === selectedStoreIdForDetail)?.name}.`)}
                                         className="px-3 py-1.5 bg-rose-50 text-rose-600 rounded-lg text-[10px] font-bold border border-rose-100 hover:bg-rose-500 hover:text-white transition-all flex items-center gap-2"
                                       >
                                         {sku}
@@ -2783,7 +2793,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   {soldSkus.length > 0 ? soldSkus.map(sku => (
                                     <div key={sku} className="group relative">
                                       <button 
-                                        onClick={() => handleSendSMS(customer.phone as string, selectedStoreIdForDetail as string, 'cross_sell', sku as string, `Hola ${customer.name || 'Cliente'}, ¡gracias por tu compra de ${sku}! Te contamos que ya tenemos nuevas referencias y colores disponibles que te encantarán.`)}
+                                        onClick={() => handleSendSMS(customer.phone as string, selectedStoreIdForDetail as string, 'cross_sell', sku as string, `Hola ${customer.name || 'Cliente'}, ¡gracias por tu compra de ${sku}! Mira las nuevas referencias y colores que te encantarán.`)}
                                         className="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-bold border border-emerald-100 hover:bg-emerald-500 hover:text-white transition-all flex items-center gap-2"
                                       >
                                         {sku}

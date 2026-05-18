@@ -5,11 +5,13 @@ import { Role, User, Product, FittingSession, InventoryLog, Customer, StoreConfi
 import Login from './components/Login';
 import WorkerApp from './components/WorkerApp';
 import AdminDashboard from './components/AdminDashboard';
+import CustomerApp from './components/CustomerApp';
+import CustomerProfile from './components/CustomerProfile';
 import InstallPrompt from './components/InstallPrompt';
-import { initialProducts, initialUsers, initialStores, initialBrands, initialAdRequests } from './constants';
+import { initialProducts, initialUsers, initialStores, initialBrands, initialAdRequests, initialCustomers } from './constants';
 import { auth, logout } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Store as StoreIcon, CheckCircle2, AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
+import { Store as StoreIcon, CheckCircle2, AlertCircle, ArrowRight, Loader2, Smartphone, Moon, Sun, Monitor } from 'lucide-react';
 
 const StoreCodePrompt: React.FC<{ 
   onJoin: (storeId: string) => void; 
@@ -30,13 +32,14 @@ const StoreCodePrompt: React.FC<{
   };
 
   return (
-    <div className="min-h-screen bg-[#020617] flex items-center justify-center p-6">
-      <div className="bg-white w-full max-w-md rounded-2xl sm:rounded-[3rem] p-6 sm:p-10 shadow-2xl animate-in zoom-in duration-500">
-        <div className="w-20 h-20 bg-indigo-600 rounded-3xl flex items-center justify-center shadow-xl shadow-indigo-200 mb-8 mx-auto">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-6 bg-cover bg-center" style={{ backgroundImage: 'url("https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=2000")' }}>
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
+      <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl sm:rounded-[3rem] p-6 sm:p-10 shadow-2xl animate-in zoom-in duration-500 relative z-10 border border-slate-100 dark:border-slate-800">
+        <div className="w-20 h-20 bg-indigo-600 rounded-3xl flex items-center justify-center shadow-xl shadow-indigo-200 dark:shadow-indigo-900/20 mb-8 mx-auto">
           <StoreIcon className="w-10 h-10 text-white" />
         </div>
         
-        <h2 className="text-2xl font-black text-center text-slate-900 mb-2">Vincular Tienda</h2>
+        <h2 className="text-2xl font-black text-center text-slate-900 dark:text-white mb-2">Vincular Tienda</h2>
         <p className="text-slate-400 text-center text-sm mb-8 font-medium">Ingresa el código proporcionado por tu gerente para comenzar a trabajar.</p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -49,7 +52,7 @@ const StoreCodePrompt: React.FC<{
                 setError('');
               }}
               placeholder="CÓDIGO DE TIENDA"
-              className="w-full px-8 py-5 bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-2xl font-black text-center text-xl uppercase tracking-[0.2em] outline-none transition-all placeholder:text-slate-300"
+              className="w-full px-8 py-5 bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500 rounded-2xl font-black text-center text-xl uppercase tracking-[0.2em] outline-none transition-all placeholder:text-slate-300 dark:placeholder:text-slate-600 text-slate-900 dark:text-white"
               required
             />
             {error && (
@@ -92,13 +95,14 @@ const PlanSelection: React.FC<{
   ];
 
   return (
-    <div className="min-h-screen bg-[#020617] flex items-center justify-center p-6">
-      <div className="bg-white w-full max-w-5xl rounded-2xl sm:rounded-[3rem] p-6 sm:p-10 md:p-16 shadow-2xl animate-in zoom-in duration-500">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-6 bg-cover bg-center" style={{ backgroundImage: 'url("https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&q=80&w=2000")' }}>
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
+      <div className="bg-white dark:bg-slate-900 w-full max-w-5xl rounded-2xl sm:rounded-[3rem] p-6 sm:p-10 md:p-16 shadow-2xl animate-in zoom-in duration-500 relative z-10 border border-slate-100 dark:border-slate-800">
         <div className="text-center mb-12">
-          <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-200 mb-6 mx-auto">
+          <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-200 dark:shadow-indigo-900/20 mb-6 mx-auto">
             {isLoading ? <Loader2 className="w-8 h-8 text-white animate-spin" /> : <CheckCircle2 className="w-8 h-8 text-white" />}
           </div>
-          <h2 className="text-3xl font-black text-slate-900 mb-2">Selecciona tu Plan de Licencia</h2>
+          <h2 className="text-3xl font-black text-slate-900 dark:text-white mb-2">Selecciona tu Plan de Licencia</h2>
           <p className="text-slate-400 font-medium">Comienza a transformar la experiencia de tus clientes hoy mismo.</p>
         </div>
 
@@ -106,7 +110,7 @@ const PlanSelection: React.FC<{
           {plans.map((plan) => (
             <div 
               key={plan.id}
-              className={`relative p-8 rounded-[2.5rem] border-2 transition-all hover:scale-105 hover:shadow-2xl flex flex-col ${plan.border} ${plan.color}`}
+              className={`relative p-8 rounded-[2.5rem] border-2 transition-all hover:scale-105 hover:shadow-2xl flex flex-col ${plan.popular ? 'border-indigo-500 shadow-xl shadow-indigo-200 dark:shadow-indigo-900/20 dark:bg-slate-800' : 'border-slate-100 dark:border-slate-800 dark:bg-slate-800/50'} ${plan.popular ? '' : plan.color}`}
             >
               {plan.popular && (
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
@@ -114,15 +118,15 @@ const PlanSelection: React.FC<{
                 </div>
               )}
               <div className="mb-8">
-                <h3 className="text-xl font-black text-slate-900">{plan.name}</h3>
+                <h3 className="text-xl font-black text-slate-900 dark:text-white">{plan.name}</h3>
                 <div className="flex items-baseline gap-1 mt-2">
-                  <span className="text-3xl font-black text-slate-900">${plan.price}</span>
+                  <span className="text-3xl font-black text-slate-900 dark:text-white">${plan.price}</span>
                   <span className="text-sm font-bold text-slate-400">/mes</span>
                 </div>
               </div>
               <ul className="space-y-4 mb-10 flex-1">
                 {plan.features.map((f, i) => (
-                  <li key={i} className="flex items-center gap-3 text-sm font-bold text-slate-600">
+                  <li key={i} className="flex items-center gap-3 text-sm font-bold text-slate-600 dark:text-slate-400">
                     <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full"></div>
                     {f}
                   </li>
@@ -132,7 +136,7 @@ const PlanSelection: React.FC<{
                 onClick={() => onSelect(plan)}
                 disabled={isLoading}
                 className={`w-full py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
-                  plan.popular ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-200 hover:bg-indigo-700' : 'bg-white text-slate-900 border-2 border-slate-200 hover:border-indigo-600'
+                  plan.popular ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-200 hover:bg-indigo-700' : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white border-2 border-slate-200 dark:border-slate-700 hover:border-indigo-600'
                 } disabled:opacity-50`}
               >
                 {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Seleccionar Plan'}
@@ -153,13 +157,94 @@ const PlanSelection: React.FC<{
   );
 };
 
+type Theme = 'light' | 'dark' | 'system';
+
+const ThemeToggle: React.FC<{ theme: Theme; setTheme: (t: Theme) => void; isDark: boolean }> = ({ theme, setTheme, isDark }) => {
+  const toggle = () => {
+    if (theme === 'system') setTheme('light');
+    else if (theme === 'light') setTheme('dark');
+    else setTheme('system');
+  };
+
+  return (
+    <button 
+      onClick={toggle}
+      className="fixed bottom-6 left-6 z-[100] w-12 h-12 bg-white dark:bg-slate-800 text-slate-900 dark:text-amber-400 rounded-2xl flex items-center justify-center shadow-2xl border border-slate-200 dark:border-slate-700 transition-all active:scale-95 group overflow-hidden"
+      title={theme === 'system' ? "Modo: Sistema" : theme === 'dark' ? "Modo: Oscuro" : "Modo: Claro"}
+    >
+      <div className="relative w-full h-full flex items-center justify-center">
+        {theme === 'system' && (
+          <div className="flex flex-col items-center">
+            <Monitor className="w-5 h-5" />
+            <span className="text-[6px] font-black absolute -bottom-1">AUTO</span>
+          </div>
+        )}
+        {theme === 'dark' && <Moon className="w-5 h-5" />}
+        {theme === 'light' && <Sun className="w-5 h-5" />}
+      </div>
+    </button>
+  );
+};
+
 const App: React.FC = () => {
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('theme');
+      return (saved as Theme) || 'system';
+    }
+    return 'system';
+  });
+
+  const [darkMode, setDarkMode] = useState(false);
+
+  useEffect(() => {
+    const handleThemeChange = () => {
+      let isDark = false;
+      if (theme === 'system') {
+        isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      } else {
+        isDark = theme === 'dark';
+      }
+      
+      setDarkMode(isDark);
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+      localStorage.setItem('theme', theme);
+    };
+
+    handleThemeChange();
+
+    if (theme === 'system') {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const listener = () => handleThemeChange();
+      mediaQuery.addEventListener('change', listener);
+      return () => mediaQuery.removeEventListener('change', listener);
+    }
+  }, [theme]);
+
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [sessions, setSessions] = useState<FittingSession[]>([]);
+  const [sessions, setSessions] = useState<FittingSession[]>([
+    {
+      id: 'demo-session',
+      customerPhone: '3001234567',
+      customerName: 'Cliente Demo',
+      fittingRoomId: 3,
+      workerId: 'santi-staff',
+      storeId: 'store-1',
+      status: SessionStatus.ACTIVE,
+      startTime: Date.now(),
+      items: [
+        { sku: '770111222-M', quantity: 1, status: ItemStatus.IN }
+      ]
+    }
+  ]);
   const [logs, setLogs] = useState<InventoryLog[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
   const [stores, setStores] = useState<Store[]>(initialStores);
   const [brands, setBrands] = useState<Brand[]>(initialBrands);
   const [adRequests, setAdRequests] = useState<AdRequest[]>(initialAdRequests);
@@ -169,6 +254,15 @@ const App: React.FC = () => {
   const [smsCampaigns, setSmsCampaigns] = useState<SMSCampaign[]>([]);
   const [userCountry, setUserCountry] = useState<string | null>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [customerSessionId, setCustomerSessionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('session');
+    if (sessionId) {
+      setCustomerSessionId(sessionId);
+    }
+  }, []);
 
   useEffect(() => {
     const detectCountry = async () => {
@@ -423,6 +517,34 @@ const App: React.FC = () => {
     }
   };
 
+  const handleCustomerPayment = (itemsToBuy: string[]) => {
+    if (!customerSessionId) return;
+    
+    setSessions(prev => prev.map(s => {
+      if (s.id === customerSessionId) {
+        const updatedItems = s.items.map(item => {
+          if (itemsToBuy.includes(item.sku)) {
+            addLog(item.sku, 'sold');
+            return { ...item, status: ItemStatus.SOLD, exitDestination: ItemExitDestination.PURCHASE };
+          }
+          return item;
+        });
+        
+        // Si pagó todo, cerramos la sesión automáticamente o la marcamos como "Pagada"
+        // Para este flujo práctico, la dejaremos activa para que el staff verifique la salida
+        // o podemos cerrarla si el cliente ya pagó y se va. 
+        // El usuario dice "al finalizar la prueba... pueda hacer el Pago", implica que es lo último.
+        return { 
+          ...s, 
+          items: updatedItems, 
+          status: SessionStatus.CLOSED,
+          endTime: Date.now()
+        };
+      }
+      return s;
+    }));
+  };
+
   const addLog = (sku: string, action: 'tried_on' | 'sold') => {
     if (!currentUser) return;
     const newLog: InventoryLog = {
@@ -439,11 +561,18 @@ const App: React.FC = () => {
     setSessions(prev => prev.map(s => {
       if (s.id === sessionId) {
         const timestamp = Date.now();
-        const itemsToSell = Object.keys(auditData).filter(sku => auditData[sku] === ItemExitDestination.PURCHASE);
-        const missingItems = Object.keys(auditData).filter(sku => auditData[sku] === ItemExitDestination.MISSING);
-        const itemsLeft = Object.keys(auditData).filter(sku => auditData[sku] === ItemExitDestination.RELOCATION);
+        const isManualPayment = Object.keys(auditData).length === 0 && s.status === SessionStatus.AWAITING_PAYMENT;
+        
+        // Si es pago manual, extraer info de los items ya auditados
+        const effectiveAudit = isManualPayment 
+          ? s.items.reduce((acc, item) => ({ ...acc, [item.sku]: item.exitDestination }), {} as Record<string, ItemExitDestination>)
+          : auditData;
 
-        // Registrar ventas en logs
+        const itemsToSell = Object.keys(effectiveAudit).filter(sku => effectiveAudit[sku] === ItemExitDestination.PURCHASE);
+        const missingItems = Object.keys(effectiveAudit).filter(sku => effectiveAudit[sku] === ItemExitDestination.MISSING);
+        const itemsLeft = Object.keys(effectiveAudit).filter(sku => effectiveAudit[sku] === ItemExitDestination.RELOCATION);
+
+        // Registrar ventas en logs (solo si no se habían registrado)
         itemsToSell.forEach(sku => addLog(sku, 'sold'));
         
         // Alerta de prendas faltantes
@@ -472,6 +601,7 @@ const App: React.FC = () => {
           const existingCustIndex = prevCust.findIndex(c => c.phone === s.customerPhone);
           const historyEntry = {
             sessionId: s.id,
+            storeId: s.storeId,
             fittingRoomId: s.fittingRoomId,
             itemsEntered,
             itemsSold: itemsToSell,
@@ -500,9 +630,9 @@ const App: React.FC = () => {
         // Update items in session with their exit status
         const updatedItems = s.items.map(item => ({
           ...item,
-          exitDestination: auditData[item.sku] || ItemExitDestination.RELOCATION,
-          status: auditData[item.sku] === ItemExitDestination.PURCHASE ? ItemStatus.SOLD : 
-                  auditData[item.sku] === ItemExitDestination.MISSING ? ItemStatus.MISSING : ItemStatus.OUT
+          exitDestination: effectiveAudit[item.sku] || ItemExitDestination.RELOCATION,
+          status: effectiveAudit[item.sku] === ItemExitDestination.PURCHASE ? ItemStatus.SOLD : 
+                  effectiveAudit[item.sku] === ItemExitDestination.MISSING ? ItemStatus.MISSING : ItemStatus.OUT
         }));
 
         // --- Marketing Automation Trigger ---
@@ -512,8 +642,8 @@ const App: React.FC = () => {
 
           // 1. Abandono de Prenda (Retargeting)
           const abandonedItems = s.items.filter(item => 
-            auditData[item.sku] === ItemExitDestination.RELOCATION || 
-            auditData[item.sku] === ItemExitDestination.MISSING
+            effectiveAudit[item.sku] === ItemExitDestination.RELOCATION || 
+            effectiveAudit[item.sku] === ItemExitDestination.MISSING
           );
 
           for (const item of abandonedItems) {
@@ -533,7 +663,7 @@ const App: React.FC = () => {
 
           // 2. Compra Exitosa (Cross-selling)
           const purchasedItems = s.items.filter(item => 
-            auditData[item.sku] === ItemExitDestination.PURCHASE
+            effectiveAudit[item.sku] === ItemExitDestination.PURCHASE
           );
 
           for (const item of purchasedItems) {
@@ -554,7 +684,15 @@ const App: React.FC = () => {
 
         triggerMarketing();
 
-        return { ...s, items: updatedItems, status: SessionStatus.CLOSED, endTime: timestamp };
+        const hasPurchaseItems = itemsToSell.length > 0;
+        const newStatus = isManualPayment ? SessionStatus.CLOSED : (hasPurchaseItems ? SessionStatus.AWAITING_PAYMENT : SessionStatus.CLOSED);
+        
+        return { 
+          ...s, 
+          items: updatedItems, 
+          status: newStatus, 
+          endTime: newStatus === SessionStatus.CLOSED ? timestamp : s.endTime 
+        };
       }
       return s;
     }));
@@ -573,16 +711,62 @@ const App: React.FC = () => {
   }
 
   // Lógica de acceso según Rol
+  if (customerSessionId) {
+    const session = sessions.find(s => s.id === customerSessionId);
+    if (session && (session.status === SessionStatus.ACTIVE || session.status === SessionStatus.AWAITING_PAYMENT)) {
+      return (
+        <CustomerApp 
+          session={session} 
+          products={products} 
+          onPayment={handleCustomerPayment} 
+          onLogout={() => setCustomerSessionId(null)}
+          brandName={brands.find(b => b.id === stores.find(st => st.id === session.storeId)?.brandId)?.name || "Fashion Store"}
+        />
+      );
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50 transition-colors duration-500">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-500">
       <InstallPrompt />
+      <ThemeToggle theme={theme} setTheme={setTheme} isDark={darkMode} />
       {!currentUser ? (
         <Login onLogin={handleLogin} users={users} />
       ) : currentUser.role === Role.STAFF && !currentUser.storeId ? (
         <StoreCodePrompt onJoin={handleJoinStore} stores={stores} onLogout={handleLogout} />
       ) : currentUser.role === Role.STORE_ADMIN && !stores.find(s => s.adminId === currentUser.id) ? (
         <PlanSelection onSelect={handleSelectPlan} onLogout={handleLogout} isLoading={isProcessingPayment} />
-      ) : currentUser.role === Role.SUPER_ADMIN || currentUser.role === Role.STORE_ADMIN ? (
+      ) : currentUser.role === Role.CUSTOMER ? (
+        (() => {
+          const session = sessions.find(s => (s.id === customerSessionId || s.customerPhone === currentUser.email) && (s.status === SessionStatus.ACTIVE || s.status === SessionStatus.AWAITING_PAYMENT));
+          if (session) {
+            return (
+              <CustomerApp 
+                session={session} 
+                products={products} 
+                onPayment={(items) => {
+                  setCustomerSessionId(session.id); // Ensure we keep track of which session was paid
+                  handleCustomerPayment(items);
+                }} 
+                onLogout={handleLogout}
+                brandName={brands.find(b => b.id === stores.find(st => st.id === session.storeId)?.brandId)?.name || "Fashion Store"}
+              />
+            );
+          } else {
+            const customerData = (customers as any).find((c: any) => c.phone === currentUser.email);
+            return (
+              <CustomerProfile 
+                user={currentUser} 
+                customerData={customerData}
+                products={products}
+                brands={brands}
+                stores={stores}
+                onLogout={handleLogout}
+              />
+            );
+          }
+        })()
+      ) : (currentUser.role === Role.SUPER_ADMIN || currentUser.role === Role.STORE_ADMIN) ? (
         <AdminDashboard 
           user={currentUser} 
           onLogout={handleLogout} 
@@ -605,6 +789,7 @@ const App: React.FC = () => {
           setInventoryAlerts={setInventoryAlerts}
           smsCampaigns={smsCampaigns}
           setSmsCampaigns={setSmsCampaigns}
+          darkMode={darkMode}
         />
       ) : (
         <WorkerApp 

@@ -103,6 +103,7 @@ const WorkerApp: React.FC<WorkerAppProps> = ({
       customerName: newCustomerName.trim(),
       fittingRoomId: selectedRoomId,
       workerId: user.id,
+      storeId: user.storeId || '',
       status: SessionStatus.ACTIVE,
       items: [],
       startTime: Date.now(),
@@ -173,16 +174,15 @@ const WorkerApp: React.FC<WorkerAppProps> = ({
   const handleCloseSession = (sessionId: string, auditData: Record<string, ItemExitDestination>) => {
     onCloseSession(sessionId, auditData);
   };
-
   return (
-    <div className="pb-32 bg-slate-50 min-h-screen">
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-20 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between shadow-sm">
+    <div className="pb-32 bg-slate-50 dark:bg-slate-950 min-h-screen transition-colors duration-500">
+      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-20 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3 sm:gap-4">
           <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-600 text-white rounded-xl sm:rounded-2xl flex items-center justify-center font-black shadow-lg text-sm sm:text-base">
             {user.name.charAt(0)}
           </div>
           <div>
-            <h1 className="text-sm sm:text-base font-black text-slate-900 leading-tight truncate max-w-[120px] sm:max-w-none">{user.name}</h1>
+            <h1 className="text-sm sm:text-base font-black text-slate-900 dark:text-white leading-tight truncate max-w-[120px] sm:max-w-none">{user.name}</h1>
             <span className="text-[9px] sm:text-[10px] text-emerald-500 font-black uppercase tracking-widest flex items-center gap-1">
                <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
                En Turno
@@ -195,23 +195,23 @@ const WorkerApp: React.FC<WorkerAppProps> = ({
               setIsAlertsOpen(true);
               markAlertsAsRead();
             }} 
-            className="w-10 h-10 sm:w-12 sm:h-12 text-slate-400 hover:text-indigo-600 rounded-xl sm:rounded-2xl transition-all relative" 
+            className="w-10 h-10 sm:w-12 sm:h-12 text-slate-400 hover:text-indigo-600 dark:hover:text-amber-400 rounded-xl sm:rounded-2xl transition-all relative" 
             title="Alertas"
           >
             <Bell className="w-5 h-5 sm:w-6 sm:h-6 mx-auto" />
             {unreadAlertsCount > 0 && (
-              <span className="absolute top-2 right-2 w-4 h-4 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white">
+              <span className="absolute top-2 right-2 w-4 h-4 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900">
                 {unreadAlertsCount}
               </span>
             )}
           </button>
-           <button onClick={onLogout} className="w-10 h-10 sm:w-12 sm:h-12 text-slate-400 hover:text-indigo-600 rounded-xl sm:rounded-2xl transition-all" title="Volver al Inicio">
+           <button onClick={onLogout} className="w-10 h-10 sm:w-12 sm:h-12 text-slate-400 hover:text-indigo-600 dark:hover:text-amber-400 rounded-xl sm:rounded-2xl transition-all" title="Volver al Inicio">
             <Smartphone className="w-5 h-5 sm:w-6 sm:h-6 mx-auto" />
           </button>
-           <button onClick={() => setIsTransferring(true)} className="w-10 h-10 sm:w-12 sm:h-12 text-slate-400 hover:text-indigo-600 rounded-xl sm:rounded-2xl transition-all">
+           <button onClick={() => setIsTransferring(true)} className="w-10 h-10 sm:w-12 sm:h-12 text-slate-400 hover:text-indigo-600 dark:hover:text-amber-400 rounded-xl sm:rounded-2xl transition-all">
             <ArrowRightLeft className="w-5 h-5 sm:w-6 sm:h-6 mx-auto" />
           </button>
-          <button onClick={onLogout} className="w-10 h-10 sm:w-12 sm:h-12 text-slate-400 hover:text-red-600 rounded-xl sm:rounded-2xl transition-all" title="Cerrar Sesión">
+           <button onClick={onLogout} className="w-10 h-10 sm:w-12 sm:h-12 text-slate-400 hover:text-red-600 rounded-xl sm:rounded-2xl transition-all" title="Cerrar Sesión">
             <LogOut className="w-5 h-5 sm:w-6 sm:h-6 mx-auto" />
           </button>
         </div>
@@ -219,17 +219,17 @@ const WorkerApp: React.FC<WorkerAppProps> = ({
 
       <div className="px-4 sm:px-6 py-4">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex sm:flex-col items-center sm:items-start justify-between sm:justify-start">
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex sm:flex-col items-center sm:items-start justify-between sm:justify-start">
             <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-0 sm:mb-1">Faltantes</p>
-            <p className="text-xl font-black text-slate-900">{shiftStats.missing}</p>
+            <p className="text-xl font-black text-slate-900 dark:text-white">{shiftStats.missing}</p>
           </div>
-          <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex sm:flex-col items-center sm:items-start justify-between sm:justify-start">
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex sm:flex-col items-center sm:items-start justify-between sm:justify-start">
             <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-0 sm:mb-1">Reubicación</p>
-            <p className="text-xl font-black text-slate-900">{shiftStats.relocation}</p>
+            <p className="text-xl font-black text-slate-900 dark:text-white">{shiftStats.relocation}</p>
           </div>
-          <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex sm:flex-col items-center sm:items-start justify-between sm:justify-start">
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex sm:flex-col items-center sm:items-start justify-between sm:justify-start">
             <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-0 sm:mb-1">Ventas</p>
-            <p className="text-xl font-black text-slate-900">{shiftStats.purchase}</p>
+            <p className="text-xl font-black text-slate-900 dark:text-white">{shiftStats.purchase}</p>
           </div>
         </div>
       </div>

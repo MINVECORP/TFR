@@ -2,11 +2,13 @@
 export enum Role {
   SUPER_ADMIN = 'SUPER_ADMIN',
   STORE_ADMIN = 'STORE_ADMIN',
-  STAFF = 'STAFF'
+  STAFF = 'STAFF',
+  CUSTOMER = 'CUSTOMER'
 }
 
 export enum SessionStatus {
   ACTIVE = 'ACTIVE',
+  AWAITING_PAYMENT = 'AWAITING_PAYMENT',
   CLOSED = 'CLOSED',
   TRANSFERRED = 'TRANSFERRED'
 }
@@ -116,6 +118,7 @@ export interface Customer {
   name?: string; // Hidden from store view
   history: {
     sessionId: string;
+    storeId: string;
     fittingRoomId: number;
     itemsEntered: string[];
     itemsSold: string[];
@@ -141,6 +144,7 @@ export interface FittingSession {
   customerName?: string;
   fittingRoomId: number;
   workerId: string;
+  storeId: string;
   status: SessionStatus;
   items: SessionItem[];
   startTime: number;

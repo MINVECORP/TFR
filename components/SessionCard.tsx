@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { FittingSession, Product, ItemStatus, ItemExitDestination } from '../types';
+import { FittingSession, Product, ItemStatus, ItemExitDestination, SessionStatus } from '../types';
 // Fixed: Added missing Package and X icons to the lucide-react import
-import { Clock, Plus, LogOut, CheckCircle2, ChevronRight, ShoppingBag, Trash2, Package, X, RefreshCcw, AlertTriangle } from 'lucide-react';
+import { Clock, Plus, LogOut, CheckCircle2, ChevronRight, ShoppingBag, Trash2, Package, X, RefreshCcw, AlertTriangle, CreditCard, Send } from 'lucide-react';
 
 interface SessionCardProps {
   session: FittingSession;
@@ -42,6 +42,7 @@ const SessionCard: React.FC<SessionCardProps> = ({ session, products, onAddItems
   }, [session.startTime]);
 
   const getStatusStyle = () => {
+    if (session.status === SessionStatus.AWAITING_PAYMENT) return { bg: 'bg-indigo-600', text: 'text-indigo-600', light: 'bg-indigo-50' };
     if (elapsedMins < 10) return { bg: 'bg-emerald-500', text: 'text-emerald-600', light: 'bg-emerald-50' };
     if (elapsedMins < 20) return { bg: 'bg-amber-500', text: 'text-amber-600', light: 'bg-amber-50' };
     return { bg: 'bg-rose-500', text: 'text-rose-600', light: 'bg-rose-50' };
@@ -51,7 +52,7 @@ const SessionCard: React.FC<SessionCardProps> = ({ session, products, onAddItems
 
   const sessionItemsWithData = session.items.map(item => ({
     ...item,
-    data: products.find(p => p.sku === item.sku)
+    data: products.find(p => p.variations?.some(v => v.sku === item.sku))
   }));
 
   const setDestination = (sku: string, dest: ItemExitDestination) => {
@@ -68,21 +69,28 @@ const SessionCard: React.FC<SessionCardProps> = ({ session, products, onAddItems
             <span className="bg-indigo-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">
               Probador {session.fittingRoomId}
             </span>
+            {session.status === SessionStatus.AWAITING_PAYMENT && (
+              <span className="bg-rose-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider animate-pulse">
+                PAGO PENDIENTE
+              </span>
+            )}
           </div>
           <h3 className="text-xl font-black text-slate-900 group-hover:text-indigo-600 transition-colors">
             {session.customerPhone}
           </h3>
           <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider mt-2 ${style.light} ${style.text}`}>
-            <Clock className="w-3 h-3" />
-            {elapsedStr}
+            {session.status === SessionStatus.AWAITING_PAYMENT ? <CreditCard className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+            {session.status === SessionStatus.AWAITING_PAYMENT ? 'Esperando Pago' : elapsedStr}
           </div>
         </div>
-        <button 
-          onClick={onAddItems}
-          className="p-3 bg-slate-50 hover:bg-indigo-600 hover:text-white rounded-2xl text-slate-400 transition-all active:scale-90"
-        >
-          <Plus className="w-6 h-6" />
-        </button>
+        {session.status !== SessionStatus.AWAITING_PAYMENT && (
+          <button 
+            onClick={onAddItems}
+            className="p-3 bg-slate-50 hover:bg-indigo-600 hover:text-white rounded-2xl text-slate-400 transition-all active:scale-90"
+          >
+            <Plus className="w-6 h-6" />
+          </button>
+        )}
       </div>
 
       <div className="space-y-3 mb-8 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
@@ -92,31 +100,62 @@ const SessionCard: React.FC<SessionCardProps> = ({ session, products, onAddItems
              <p className="text-[10px] font-black uppercase tracking-widest">Sin prendas</p>
           </div>
         ) : (
-          sessionItemsWithData.map((item, idx) => (
-            <div key={`${item.sku}-${idx}`} className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100 group/item">
-              <div className="flex flex-col max-w-[70%]">
-                <span className="text-sm font-bold text-slate-800 truncate">
-                  {item.data?.name || 'Item Desconocido'}
-                </span>
-                <span className="text-[10px] text-slate-400 font-mono">{item.sku}</span>
+          sessionItemsWithData.map((item, idx) => {
+            const isPurchase = item.exitDestination === ItemExitDestination.PURCHASE;
+            return (
+              <div key={`${item.sku}-${idx}`} className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
+                isPurchase ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-100'
+              } group/item`}>
+                <div className="flex flex-col max-w-[70%]">
+                  <span className={`text-sm font-bold truncate ${isPurchase ? 'text-emerald-900' : 'text-slate-800'}`}>
+                    {item.data?.name || 'Item Desconocido'}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-400 font-mono">{item.sku}</span>
+                    {isPurchase && (
+                      <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest">A comprar</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2.5 py-1 rounded-lg text-xs font-black shadow-sm border ${
+                    isPurchase ? 'bg-white text-emerald-600 border-emerald-100' : 'bg-white text-indigo-600 border-slate-100'
+                  }`}>
+                    x{item.quantity}
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="bg-white px-2.5 py-1 rounded-lg text-xs font-black text-indigo-600 shadow-sm border border-slate-100">
-                  x{item.quantity}
-                </span>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
-      <button 
-        onClick={() => setIsClosingModal(true)}
-        className="w-full flex items-center justify-center gap-3 bg-slate-900 hover:bg-black text-white py-5 rounded-[1.5rem] font-black transition-all text-sm shadow-lg shadow-slate-200"
-      >
-        <LogOut className="w-5 h-5" />
-        ARQUEO Y SALIDA
-      </button>
+      {session.status === SessionStatus.AWAITING_PAYMENT ? (
+        <div className="flex flex-col gap-2">
+          <button 
+            onClick={() => onClose({})} // Se asume que auditData ya se procesó al pasar a AWAITING_PAYMENT
+            className="w-full flex items-center justify-center gap-3 bg-emerald-600 hover:bg-emerald-700 text-white py-5 rounded-[1.5rem] font-black transition-all text-sm shadow-lg shadow-emerald-200"
+          >
+            <CheckCircle2 className="w-5 h-5" />
+            CONFIRMAR PAGO MANUAL
+          </button>
+          <button 
+            className="w-full flex items-center justify-center gap-2 text-indigo-600 py-2 font-black text-[10px] uppercase tracking-[0.2em] hover:bg-indigo-50 rounded-xl transition-all"
+            onClick={() => alert('Link de pago enviado nuevamente por SMS')}
+          >
+            <Send className="w-3 h-3" />
+            Reenviar Link
+          </button>
+        </div>
+      ) : (
+        <button 
+          onClick={() => setIsClosingModal(true)}
+          className="w-full flex items-center justify-center gap-3 bg-slate-900 hover:bg-black text-white py-5 rounded-[1.5rem] font-black transition-all text-sm shadow-lg shadow-slate-200"
+        >
+          <LogOut className="w-5 h-5" />
+          ARQUEO Y SALIDA
+        </button>
+      )}
 
       {/* Close/Checkout Modal */}
       {isClosingModal && (
